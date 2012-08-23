@@ -293,6 +293,8 @@ SRCS_MPLAYER-$(VDPAU)         += libvo/vo_vdpau.c
 SRCS_MPLAYER-$(X11)           += libvo/vo_x11.c libvo/x11_common.c
 SRCS_MPLAYER-$(XV)            += libvo/vo_xv.c
 
+SRCS_MPLAYER-$(LUAJIT)        += libmpcodecs/vf_lua.c
+
 SRCS_MPLAYER = command.c \
                m_property.c \
                mixer.c \

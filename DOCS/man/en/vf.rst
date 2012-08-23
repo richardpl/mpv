@@ -477,6 +477,33 @@ geq=equation
         :p(x,y):  returns the value of the pixel at location x/y of the current
                   plane.
 
+lua=fn_l:fn_u:fn_v:file
+    Generic Lua equation/function filter. This filter uses LuaJIT FFI to
+    compile and run Lua expressions as filter equations.
+
+    Each of the strings fn_l, fn_u and fn_v are compiled as Lua expressions and
+    produce a single pixel in the respective color plane. For empty strings, the
+    pixel value is passed through. If no expression is specified, a file
+    argument is expected (see below).
+
+    Pixel values are in the range 0-1. If your calculation can go out of range,
+    you must clip them yourself.
+
+    The following values are predefined:
+
+    :x / y:             the coordinates of the current pixel (as integer)
+    :p(x,y):            returns the value of the pixel at location x/y of the
+                        current plane
+    :width / height:    width and height of the image
+
+    If a file argument is specified, the file is loaded as Lua chunk. It should
+    define a function named filter_image. This function is called on every new
+    image, and can access the global variables src and dst, which contain the
+    source and destination images.
+
+    It should be understood that the Lua scripts are not sandboxed, and only
+    trusted scripts should be used.
+
 test
     Generate various test patterns.
 

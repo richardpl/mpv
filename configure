@@ -321,6 +321,7 @@ Optional features:
   --enable-smb           enable Samba (SMB) input [autodetect]
   --enable-libquvi       enable libquvi [autodetect]
   --enable-lcms2         enable LCMS2 support [autodetect]
+  --enable-luajit        enable vf_lua with LuaJIT 2.x [autodetect]
   --disable-vcd          disable VCD support [autodetect]
   --disable-bluray       disable Blu-ray support [autodetect]
   --disable-dvdread      disable libdvdread [autodetect]
@@ -464,6 +465,7 @@ _vcd=auto
 _bluray=auto
 _dvdread=auto
 _lcms2=auto
+_luajit=auto
 _xinerama=auto
 _vm=auto
 _xf86keysym=auto
@@ -672,6 +674,8 @@ for ac_option do
   --disable-dvdread)    _dvdread=no     ;;
   --enable-lcms2)       _lcms2=yes      ;;
   --disable-lcms2)      _lcms2=no       ;;
+  --enable-luajit)      _luajit=yes     ;;
+  --disable-luajit)     _luajit=no      ;;
   --enable-xinerama)    _xinerama=yes   ;;
   --disable-xinerama)   _xinerama=no    ;;
   --enable-vm)          _vm=yes         ;;
@@ -2913,6 +2917,16 @@ fi
 echores "$_lcms2"
 
 
+echocheck "LuaJIT support"
+if test "$_luajit" = auto ; then
+    _luajit=no
+    if pkg_config_add luajit ; then
+        _luajit=yes
+    fi
+fi
+echores "$_luajit"
+
+
 # Test with > against Libav 0.8 versions which will NOT work rather than
 # specify minimum version, to allow (future) point releases to possibly work.
 all_libav_libs="libavutil > 51.21.0:libavcodec > 53.34.0:libavformat > 53.20.0:libswscale >= 2.0.0"
@@ -3351,6 +3365,7 @@ DUMMY_OSD = $_dummy_osd
 LIBBLURAY = $_bluray
 LIBBS2B = $_libbs2b
 LCMS2 = $_lcms2
+LUAJIT = $_luajit
 LIBPOSTPROC = $libpostproc
 LIBSMBCLIENT = $_smb
 LIBQUVI = $_libquvi

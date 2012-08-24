@@ -8,7 +8,9 @@ PIXEL_FN_PRELUDE = "local x, y, fx, fy, c = ...; return "
 
 local ffi = require('ffi')
 
-require('v').start('yourlogdump.txt')
+--LuaJIT debugging hooks - useful for figuring out why something is slow.
+--Needs http://repo.or.cz/w/luajit-2.0.git/blob/HEAD:/src/jit/v.lua
+--require('v').start('yourlogdump.txt')
 
 -- These are filled by the C code (and _prepare_filter) by default.
 width = 0

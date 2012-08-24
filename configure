@@ -2924,6 +2924,11 @@ if test "$_luajit" = auto ; then
         _luajit=yes
     fi
 fi
+if test "$_luajit" = yes; then
+    def_luajit="#define CONFIG_LUAJIT 1"
+else
+    def_luajit="#undef CONFIG_LUAJIT"
+fi
 echores "$_luajit"
 
 
@@ -3593,6 +3598,7 @@ $def_socklen_t
 $def_vstream
 
 $def_lcms2
+$def_luajit
 
 
 /* libvo options */

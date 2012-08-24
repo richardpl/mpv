@@ -208,7 +208,9 @@ static const vf_info_t *const filter_list[] = {
     &vf_info_fixpts,
     &vf_info_stereo3d,
     &vf_info_dlopen,
+#ifdef CONFIG_LUAJIT
     &vf_info_lua,
+#endif
     NULL
 };
 

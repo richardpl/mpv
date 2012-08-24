@@ -37,76 +37,15 @@
 #define PLANES 3
 
 static struct vf_priv_s {
-    char *cfg_fn[PLANES];
+    char *cfg_fn;
+    char *cfg_plane_fn[PLANES];
     char *cfg_file;
 
     lua_State *L;
 } const vf_priv_dflt = {};
 
 static const char *lua_code =
-"local ffi = require('ffi')\n"
-"require('v').start('yourlogdump.txt')\n"
-"dst = {{}, {}, {}}\n"
-"src = {{}, {}, {}}\n"
-"function _prepare_filter()\n"
-"    _G.width = src.width\n"
-"    _G.height = src.height\n"
-"    -- can't do this type conversion with the C API\n"
-"    -- also, doing the cast in an inner loop makes it slow\n"
-"    for i = 1, src.plane_count do\n"
-"        src[i].ptr = ffi.cast('uint8_t*', src[i].ptr)\n"
-"        dst[i].ptr = ffi.cast('uint8_t*', dst[i].ptr)\n"
-"    end\n"
-"end\n"
-"local function _px_rowptr(plane, y)\n"
-"    return ffi.cast(plane.pixel_ptr_type, plane.ptr + plane.stride * y)\n"
-"end\n"
-"local function _px_noclip(plane, x, y)\n"
-"    return _px_rowptr(plane, y)[x] / plane.max\n"
-"end\n"
-"function px(plane_nr, x, y)\n"
-"    local plane = src[plane_nr]\n"
-"    if x >= plane.width then x = plane.width - 1 end\n"
-"    if x < 0 then x = 0 end\n"
-"    if y >= plane.height then y = plane.height - 1 end\n"
-"    if y < 0 then y = 0 end\n"
-"    return _px_noclip(plane, x, y)\n"
-"end\n"
-"px_fns = {function(x, y) return px(1, x, y) end,\n"
-"          function(x, y) return px(2, x, y) end,\n"
-"          function(x, y) return px(3, x, y) end}\n"
-"function _filter_plane(dst, src, pixel_fn)\n"
-"    local src_start_ptr = src.ptr\n"
-"    local src_stride = src.stride\n"
-"    local dst_start_ptr = dst.ptr\n"
-"    local dst_stride = dst.stride\n"
-"    local width = src.width\n"
-"    local max = src.max\n"
-"    local type = src.pixel_ptr_type\n"
-"    _G.p = px_fns[dst.plane_nr]\n"
-"    for y = 0, src.height - 1 do\n"
-"        local src_ptr = ffi.cast(type, src_start_ptr + src_stride * y)\n"
-"        local dst_ptr = ffi.cast(type, dst_start_ptr + dst_stride * y)\n"
-"        for x = 0, width - 1 do\n"
-"            dst_ptr[x] = pixel_fn(x, y, src_ptr[x] / max) * max\n"
-"        end\n"
-"    end\n"
-"end\n"
-"function _copy_plane(dst, src)\n"
-"    for y = 0, src.height - 1 do\n"
-"        ffi.copy(_px_rowptr(dst, y), _px_rowptr(src, y),\n"
-"                 src.bytes_per_pixel * src.width)\n"
-"    end\n"
-"end\n"
-"function filter_image()\n"
-"    for i = 1, src.plane_count do\n"
-"        if plane_fn and plane_fn[i] then\n"
-"            _filter_plane(dst[i], src[i], plane_fn[i])\n"
-"        else\n"
-"            _copy_plane(dst[i], src[i])\n"
-"        end\n"
-"    end\n"
-"end\n"
+#include "libmpcodecs/vf_lua_lib.h"
 ;
 
 static int config(struct vf_instance *vf,
@@ -252,7 +191,8 @@ static int vf_open(vf_instance_t *vf, char *args)
 {
     bool have_fn = false;
     for (int n = 0; n < PLANES; n++)
-        have_fn |= vf->priv->cfg_fn[n] && vf->priv->cfg_fn[n][0];
+        have_fn |= vf->priv->cfg_plane_fn[n] && vf->priv->cfg_plane_fn[n][0];
+    have_fn |= vf->priv->cfg_fn && vf->priv->cfg_fn[0];
     if (!vf->priv->cfg_file && !have_fn) {
         mp_msg(MSGT_VFILTER, MSGL_ERR, "vf_lua: no arguments\n");
         return 0;
@@ -269,20 +209,15 @@ static int vf_open(vf_instance_t *vf, char *args)
     if (have_fn) {
         lua_newtable(L); // t
         for (int n = 0; n < PLANES; n++) {
-            char *expr = vf->priv->cfg_fn[n];
-
-            // please kill me now
-            // or better, kill the retarded suboption parser
-            for (int n = 0; expr && expr[n]; n++) {
-                if (expr[n] == ';')
-                    expr[n] = ',';
-            }
-
+            char *expr = vf->priv->cfg_plane_fn[n];
+            if (!(expr && expr[0]))
+                expr = vf->priv->cfg_fn;
             if (expr && expr[0]) {
-                lua_pushstring(L, "local x, y, c = ...; return ("); // t s
-                lua_pushstring(L, expr); // t s s
-                lua_pushstring(L, ")"); // t s s s
-                lua_concat(L, 3); // t s
+                lua_getglobal(L, "PIXEL_FN_PRELUDE"); // t s
+                lua_pushstring(L, "("); // t s*2
+                lua_pushstring(L, expr); // t s*3
+                lua_pushstring(L, ")"); // t s*4
+                lua_concat(L, 4); // t s
                 const char *s = lua_tostring(L, -1); // t s
                 if (luaL_loadstring(L, s))
                     goto lua_error;
@@ -312,9 +247,10 @@ lua_error:
 
 #define ST_OFF(f) M_ST_OFF(struct vf_priv_s, f)
 static m_option_t vf_opts_fields[] = {
-    {"fn_l", ST_OFF(cfg_fn[0]), CONF_TYPE_STRING, 0, 0, 0, NULL},
-    {"fn_u", ST_OFF(cfg_fn[1]), CONF_TYPE_STRING, 0, 0, 0, NULL},
-    {"fn_v", ST_OFF(cfg_fn[2]), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"fn", ST_OFF(cfg_fn), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"fn_l", ST_OFF(cfg_plane_fn[0]), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"fn_u", ST_OFF(cfg_plane_fn[1]), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"fn_v", ST_OFF(cfg_plane_fn[2]), CONF_TYPE_STRING, 0, 0, 0, NULL},
     {"file", ST_OFF(cfg_file), CONF_TYPE_STRING, 0, 0, 0, NULL},
     { NULL, NULL, 0, 0, 0, 0, NULL }
 };

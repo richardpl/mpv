@@ -477,32 +477,43 @@ geq=equation
         :p(x,y):  returns the value of the pixel at location x/y of the current
                   plane.
 
-lua=fn_l:fn_u:fn_v:file
+lua=fn:fn_l:fn_u:fn_v:file
     Generic Lua equation/function filter. This filter uses LuaJIT FFI to
     compile and run Lua expressions as filter equations.
 
-    Each of the strings fn_l, fn_u and fn_v are compiled as Lua expressions and
-    produce a single pixel in the respective color plane. For empty strings, the
-    pixel value is passed through. If no expression is specified, a file
-    argument is expected (see below).
+    Each of the options fn_l, fn_u and fn_v are compiled as Lua expressions and
+    produce a single pixel in the respective color plane. For empty arguments,
+    the pixel value is passed through. The option fn specifies one function for
+    all planes. If none of the fn, fn_l, fn_u or fn_v options are given, the
+    file option will be used (see below).
 
-    Pixel values are in the range 0-1. If your calculation can go out of range,
-    you must clip them yourself.
+    Pixel values are in the range 0-1, and results are clipped to fit into this
+    range. Pixel coordinates are in integers, and are clipped against the plane
+    size. Fractional parts are trunciated.
 
     The following values are predefined:
 
     :x / y:             the coordinates of the current pixel (as integer)
     :p(x,y):            returns the value of the pixel at location x/y of the
                         current plane
+    :fx / fy:           coordinates in range [0, 1)
+    :pf(fx,fy):         pixel at location x/y with coordinates in range [0, 1)
     :width / height:    width and height of the image
+    :sw / sh:           width/height scale depending on the currently filtered
+                        plane, e.g. 1,1 and 0.5,0.5 for YUV 4:2:0
+
+    Additionally, anything in math is guaranteed to be available, e.g. math.pi
+    for the number pi.
 
     If a file argument is specified, the file is loaded as Lua chunk. It should
     define a function named filter_image. This function is called on every new
     image, and can access the global variables src and dst, which contain the
-    source and destination images.
+    source and destination images. This requires writing non-trivial Lua code,
+    and learning how things are done by looking at the vf_lua_lib.lua souce
+    file.
 
-    It should be understood that the Lua scripts are not sandboxed, and only
-    trusted scripts should be used.
+    It should be understood that the Lua scripts and expressions are not
+    sandboxed, and only trusted scripts should be used.
 
 test
     Generate various test patterns.

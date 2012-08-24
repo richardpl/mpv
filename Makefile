@@ -414,6 +414,10 @@ libvo/vo_gl3.c: libvo/vo_gl3_shaders.h
 libvo/vo_gl3_shaders.h: TOOLS/file2string.py libvo/vo_gl3_shaders.glsl
 	./$^ >$@
 
+libmpcodecs/vf_lua.c: libmpcodecs/vf_lua_lib.h
+libmpcodecs/vf_lua_lib.h: TOOLS/file2string.py libmpcodecs/vf_lua_lib.lua
+	./$^ >$@
+
 sub/osd_libass.c: sub/osd_font.h
 sub/osd_font.h: TOOLS/file2string.py sub/osd_font.pfb
 	./$^ >$@

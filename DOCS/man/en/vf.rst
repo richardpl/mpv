@@ -505,12 +505,15 @@ lua=fn:fn_l:fn_u:fn_v:file
     Additionally, anything in math is guaranteed to be available, e.g. math.pi
     for the number pi.
 
-    If a file argument is specified, the file is loaded as Lua chunk. It should
+    If a file argument is specified, the file is loaded as Lua chunk. It can
     define a function named filter_image. This function is called on every new
     image, and can access the global variables src and dst, which contain the
     source and destination images. This requires writing non-trivial Lua code,
     and learning how things are done by looking at the vf_lua_lib.lua souce
     file.
+
+    The file argument can also be used to define functions and values to be
+    used by expressions passed via the normal fn* options.
 
     It should be understood that the Lua scripts and expressions are not
     sandboxed, and only trusted scripts should be used.

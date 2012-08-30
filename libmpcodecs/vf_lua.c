@@ -178,8 +178,6 @@ static int put_image(struct vf_instance *vf, mp_image_t *mpi, double pts)
     return vf_next_put_image(vf, dmpi, pts);
 }
 
-//===========================================================================//
-
 static int query_format(struct vf_instance *vf, unsigned int fmt)
 {
     if (mp_get_chroma_shift(fmt, NULL, NULL, NULL) == 0)
@@ -187,13 +185,18 @@ static int query_format(struct vf_instance *vf, unsigned int fmt)
     return vf_next_query_format(vf, fmt);
 }
 
+static bool string_not_empty(const char *arg)
+{
+    return arg && arg[0];
+}
+
 static int vf_open(vf_instance_t *vf, char *args)
 {
     bool have_fn = false;
     for (int n = 0; n < PLANES; n++)
-        have_fn |= vf->priv->cfg_plane_fn[n] && vf->priv->cfg_plane_fn[n][0];
-    have_fn |= vf->priv->cfg_fn && vf->priv->cfg_fn[0];
-    if (!vf->priv->cfg_file && !have_fn) {
+        have_fn |= string_not_empty(vf->priv->cfg_plane_fn[n]);
+    have_fn |= string_not_empty(vf->priv->cfg_fn);
+    if (!string_not_empty(vf->priv->cfg_file) && !have_fn) {
         mp_msg(MSGT_VFILTER, MSGL_ERR, "vf_lua: no arguments\n");
         return 0;
     }
@@ -205,6 +208,10 @@ static int vf_open(vf_instance_t *vf, char *args)
 
     if (luaL_dostring(L, lua_code))
         goto lua_error;
+
+    if (string_not_empty(vf->priv->cfg_file))
+        if (luaL_loadfile(L, vf->priv->cfg_file) || lua_pcall(L, 0, 0, 0))
+            goto lua_error;
 
     if (have_fn) {
         lua_newtable(L); // t
@@ -227,9 +234,6 @@ static int vf_open(vf_instance_t *vf, char *args)
             }
         }
         lua_setglobal(L, "plane_fn"); // -
-    } else {
-        if (luaL_loadfile(L, vf->priv->cfg_file) || lua_pcall(L, 0, 0, 0))
-            goto lua_error;
     }
 
     vf->put_image = put_image;

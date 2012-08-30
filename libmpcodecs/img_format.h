@@ -21,6 +21,7 @@
 
 #include <sys/types.h>
 #include "config.h"
+#include "bstr.h"
 
 /* RGB/BGR Formats */
 
@@ -198,14 +199,6 @@
 #define IMGFMT_MPEGPES (('M'<<24)|('P'<<16)|('E'<<8)|('S'))
 #define IMGFMT_MJPEG (('M')|('J'<<8)|('P'<<16)|('G'<<24))
 
-// I think that this code could not be used by any other codec/format
-#define IMGFMT_XVMC 0x1DC70000
-#define IMGFMT_XVMC_MASK 0xFFFF0000
-#define IMGFMT_IS_XVMC(fmt) (((fmt)&IMGFMT_XVMC_MASK)==IMGFMT_XVMC)
-//these are chroma420
-#define IMGFMT_XVMC_MOCO_MPEG2 (IMGFMT_XVMC|0x02)
-#define IMGFMT_XVMC_IDCT_MPEG2 (IMGFMT_XVMC|0x82)
-
 // VDPAU specific format.
 #define IMGFMT_VDPAU               0x1DC80000
 #define IMGFMT_VDPAU_MASK          0xFFFF0000
@@ -217,7 +210,7 @@
 #define IMGFMT_VDPAU_VC1           (IMGFMT_VDPAU|0x05)
 #define IMGFMT_VDPAU_MPEG4         (IMGFMT_VDPAU|0x06)
 
-#define IMGFMT_IS_HWACCEL(fmt) (IMGFMT_IS_VDPAU(fmt) || IMGFMT_IS_XVMC(fmt))
+#define IMGFMT_IS_HWACCEL(fmt) IMGFMT_IS_VDPAU(fmt)
 
 typedef struct {
     void* data;
@@ -243,7 +236,7 @@ struct mp_imgfmt_entry {
 
 extern struct mp_imgfmt_entry mp_imgfmt_list[];
 
-unsigned int mp_imgfmt_from_name(const char *name);
+unsigned int mp_imgfmt_from_name(bstr name, bool allow_hwaccel);
 const char *mp_imgfmt_to_name(unsigned int fmt);
 
 #endif /* MPLAYER_IMG_FORMAT_H */

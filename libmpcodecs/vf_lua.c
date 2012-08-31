@@ -40,6 +40,12 @@ static struct vf_priv_s {
     char *cfg_fn;
     char *cfg_plane_fn[PLANES];
     char *cfg_file;
+    int cfg_rgb;
+    char *cfg_lut;
+    char *cfg_plane_lut[PLANES];
+    char *cfg_config;
+
+    int config_w, config_h;
 
     lua_State *L;
 } const vf_priv_dflt = {};
@@ -48,16 +54,72 @@ static const char *lua_code =
 #include "libmpcodecs/vf_lua_lib.h"
 ;
 
+static int query_format(struct vf_instance *vf, unsigned int fmt)
+{
+    struct vf_priv_s *p = vf->priv;
+    if (p->cfg_rgb) {
+        if (fmt != IMGFMT_RGB32)
+            return 0;
+    } else {
+        if (mp_get_chroma_shift(fmt, NULL, NULL, NULL) == 0)
+            return 0;
+    }
+    return vf_next_query_format(vf, fmt);
+}
+
+static void print_call_error(lua_State *L, const char *what)
+{
+    const char *err = "<unknown>";
+    if (lua_isstring(L, -1))
+        err = lua_tostring(L, -1);
+    mp_msg(MSGT_VFILTER, MSGL_ERR, "vf_lua: error running %s: %s\n", what, err);
+    lua_pop(L, 1);
+}
+
+struct config_closure {
+    int *w, *h, *d_w, *d_h;
+};
+
+static int run_lua_config(lua_State *L)
+{
+    struct config_closure *c = lua_touserdata(L, 1);
+
+    lua_getglobal(L, "config");
+    lua_pushinteger(L, *c->w);
+    lua_pushinteger(L, *c->h);
+    lua_pushinteger(L, *c->d_w);
+    lua_pushinteger(L, *c->d_h);
+    lua_call(L, 4, 4);
+    *c->w = lua_tointeger(L, -4);
+    *c->h = lua_tointeger(L, -3);
+    *c->d_w = lua_tointeger(L, -2);
+    *c->d_h = lua_tointeger(L, -1);
+
+    return 0;
+}
+
 static int config(struct vf_instance *vf,
                   int width, int height, int d_width, int d_height,
                   unsigned int flags, unsigned int fmt)
 {
+    struct vf_priv_s *p = vf->priv;
+
+    struct config_closure c = { &width, &height, &d_width, &d_height };
+    if (lua_cpcall(p->L, run_lua_config, &c)) {
+        print_call_error(p->L, "config");
+        return 0;
+    }
+
+    p->config_w = width;
+    p->config_h = height;
+
     return vf_next_config(vf, width, height, d_width, d_height, flags, fmt);
 }
 
 static void uninit(struct vf_instance *vf)
 {
-    lua_close(vf->priv->L);
+    struct vf_priv_s *p = vf->priv;
+    lua_close(p->L);
 }
 
 // Set the field of the passed Lua table to the given mpi
@@ -119,6 +181,12 @@ static void set_lua_mpi_fields(lua_State *L, mp_image_t *mpi)
         lua_pushinteger(L, valid ? max : 0);
         lua_setfield(L, -2, "max");
 
+        lua_pushstring(L, mp_imgfmt_to_name(mpi->imgfmt));
+        lua_setfield(L, -2, "imgfmt");
+
+        lua_pushboolean(L, packed_rgb);
+        lua_setfield(L, -2, "packed_rgb");
+
         lua_pop(L, 1); // p
     }
 
@@ -128,20 +196,17 @@ static void set_lua_mpi_fields(lua_State *L, mp_image_t *mpi)
     lua_pushinteger(L, mpi->h);
     lua_setfield(L, -2, "height");
 
-    lua_pushboolean(L, packed_rgb);
-    lua_setfield(L, -2, "packed_rgb");
-
     lua_pushinteger(L, mpi->num_planes);
     lua_setfield(L, -2, "plane_count");
 }
 
-struct closure {
+struct filter_closure {
     mp_image_t *mpi, *dmpi;
 };
 
 static int run_lua_filter(lua_State *L)
 {
-    struct closure *c = lua_touserdata(L, 1);
+    struct filter_closure *c = lua_touserdata(L, 1);
 
     lua_getglobal(L, "src"); // p
     set_lua_mpi_fields(L, c->mpi); // p
@@ -163,88 +228,89 @@ static int run_lua_filter(lua_State *L)
 
 static int put_image(struct vf_instance *vf, mp_image_t *mpi, double pts)
 {
+    struct vf_priv_s *p = vf->priv;
     lua_State *L = vf->priv->L;
-    mp_image_t *dmpi;
 
-    if(!(mpi->flags&MP_IMGFLAG_DIRECT)){
-        // no DR, so get a new image! hope we'll get DR buffer:
-        vf->dmpi=vf_get_image(vf->next,mpi->imgfmt, MP_IMGTYPE_TEMP,
-                              MP_IMGFLAG_ACCEPT_STRIDE|MP_IMGFLAG_PREFER_ALIGNED_STRIDE,
-                              mpi->w,mpi->h);
-    }
+    vf->dmpi = vf_get_image(vf->next,mpi->imgfmt, MP_IMGTYPE_TEMP,
+                            MP_IMGFLAG_ACCEPT_STRIDE, p->config_w, p->config_h);
 
-    dmpi= vf->dmpi;
+    mp_image_t *dmpi = vf->dmpi;
 
     vf_clone_mpi_attributes(dmpi, mpi);
 
-    struct closure c = { .mpi = mpi, .dmpi = dmpi };
-    if (lua_cpcall(L, run_lua_filter, &c)) {
-        const char *err = "<unknown>";
-        if (lua_isstring(L, -1))
-            err = lua_tostring(L, -1);
-        mp_msg(MSGT_VFILTER, MSGL_ERR, "vf_lua: error running filter: %s\n",
-               err);
-        lua_pop(L, 1);
-    }
+    struct filter_closure c = { .mpi = mpi, .dmpi = dmpi };
+    if (lua_cpcall(L, run_lua_filter, &c))
+        print_call_error(L, "filter");
 
     return vf_next_put_image(vf, dmpi, pts);
 }
 
-static int query_format(struct vf_instance *vf, unsigned int fmt)
-{
-    if (mp_get_chroma_shift(fmt, NULL, NULL, NULL) == 0 && fmt != IMGFMT_RGB32)
-        return 0;
-    return vf_next_query_format(vf, fmt);
-}
-
-static bool string_not_empty(const char *arg)
+static bool string_is_set(const char *arg)
 {
     return arg && arg[0];
 }
 
+// Compile (_G.prefix .. expr), and return it on the Lua stack.
+static bool load_fn(lua_State *L, const char *prefix, const char *expr)
+{
+    lua_getglobal(L, prefix); // s
+    lua_pushstring(L, expr); // s*2
+    lua_concat(L, 2); // s
+    const char *s = lua_tostring(L, -1); // s
+    if (luaL_loadstring(L, s))
+        return false;
+    // s fn
+    lua_remove(L, -2); // fn
+    return true;
+}
+
+// Do load_fn() for each plane (fall back to expr if no per-plane function set).
+// Return the table of plane functions on the Lua stack.
+static bool load_fn_planes(lua_State *L, const char *prefix, const char *expr,
+                           char *expr_planes[3])
+{
+    lua_newtable(L); // t
+    for (int n = 0; n < PLANES; n++) {
+        const char *plane_expr = expr_planes[n];
+        if (!string_is_set(plane_expr))
+            plane_expr = expr;
+        if (string_is_set(plane_expr)) {
+            if (!load_fn(L, prefix, plane_expr))
+                return false;
+            lua_rawseti(L, -2, n + 1); // t
+        }
+    }
+    return true;
+}
+
 static int vf_open(vf_instance_t *vf, char *args)
 {
-    bool have_fn = false;
-    for (int n = 0; n < PLANES; n++)
-        have_fn |= string_not_empty(vf->priv->cfg_plane_fn[n]);
-    have_fn |= string_not_empty(vf->priv->cfg_fn);
-    if (!string_not_empty(vf->priv->cfg_file) && !have_fn) {
-        mp_msg(MSGT_VFILTER, MSGL_ERR, "vf_lua: no arguments\n");
-        return 0;
-    }
-
+    struct vf_priv_s *p = vf->priv;
     lua_State *L = luaL_newstate();
-    vf->priv->L = L;
+    p->L = L;
 
     luaL_openlibs(L);
 
     if (luaL_dostring(L, lua_code))
         goto lua_error;
 
-    if (string_not_empty(vf->priv->cfg_file))
-        if (luaL_loadfile(L, vf->priv->cfg_file) || lua_pcall(L, 0, 0, 0))
-            goto lua_error;
+    if (!load_fn_planes(L, "PIXEL_FN_PRELUDE", p->cfg_fn, p->cfg_plane_fn))
+        goto lua_error;
+    lua_setglobal(L, "plane_fn"); // -
 
-    if (have_fn) {
-        lua_newtable(L); // t
-        for (int n = 0; n < PLANES; n++) {
-            char *expr = vf->priv->cfg_plane_fn[n];
-            if (!(expr && expr[0]))
-                expr = vf->priv->cfg_fn;
-            if (expr && expr[0]) {
-                lua_getglobal(L, "PIXEL_FN_PRELUDE"); // t s
-                lua_pushstring(L, expr); // t s*2
-                lua_concat(L, 2); // t s
-                const char *s = lua_tostring(L, -1); // t s
-                if (luaL_loadstring(L, s))
-                    goto lua_error;
-                // t s fn
-                lua_remove(L, -2); // t fn
-                lua_rawseti(L, -2, n + 1); // t
-            }
-        }
-        lua_setglobal(L, "plane_fn"); // -
+    if (!load_fn_planes(L, "LUT_FN_PRELUDE", p->cfg_lut, p->cfg_plane_lut))
+        goto lua_error;
+    lua_setglobal(L, "plane_lut_fn"); // -
+
+    if (string_is_set(p->cfg_config)) {
+        if (!load_fn(L, "CONFIG_FN_PRELUDE", p->cfg_config))
+            goto lua_error;
+        lua_setglobal(L, "config_fn");
     }
+
+    if (string_is_set(p->cfg_file))
+        if (luaL_loadfile(L, p->cfg_file) || lua_pcall(L, 0, 0, 0))
+            goto lua_error;
 
     vf->put_image = put_image;
     vf->query_format = query_format;
@@ -266,6 +332,12 @@ static m_option_t vf_opts_fields[] = {
     {"fn_u", ST_OFF(cfg_plane_fn[1]), CONF_TYPE_STRING, 0, 0, 0, NULL},
     {"fn_v", ST_OFF(cfg_plane_fn[2]), CONF_TYPE_STRING, 0, 0, 0, NULL},
     {"file", ST_OFF(cfg_file), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"rgb", ST_OFF(cfg_rgb), CONF_TYPE_FLAG, 0, 0, 1, NULL},
+    {"lut", ST_OFF(cfg_lut), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"lut_l", ST_OFF(cfg_plane_lut[0]), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"lut_u", ST_OFF(cfg_plane_lut[1]), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"lut_v", ST_OFF(cfg_plane_lut[2]), CONF_TYPE_STRING, 0, 0, 0, NULL},
+    {"config", ST_OFF(cfg_config), CONF_TYPE_STRING, 0, 0, 0, NULL},
     { NULL, NULL, 0, 0, 0, 0, NULL }
 };
 

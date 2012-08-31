@@ -477,46 +477,83 @@ geq=equation
         :p(x,y):  returns the value of the pixel at location x/y of the current
                   plane.
 
-lua=fn:fn_l:fn_u:fn_v:file
+lua=fn=expr[:fn_y=expr][:fn_u=expr][:fn_v=expr][:file=path][:rgb][:lut=expr][:config=expr]
     Generic Lua equation/function filter. This filter uses LuaJIT FFI to
     compile and run Lua expressions as filter equations.
 
-    Each of the options fn_l, fn_u and fn_v are compiled as Lua expressions and
-    produce a single pixel in the respective color plane. For empty arguments,
-    the pixel value is passed through. The option fn specifies one function for
-    all planes. If none of the fn, fn_l, fn_u or fn_v options are given, the
-    file option will be used (see below).
+    fn=expr
+        The expressions is compiled as Lua expression. It is called for each
+        pixel on each color plane, and produces a single color value.
+
+    fn_y=expr, fn_u=expr, fn_v=expr
+        Specify expressions to run on the Y (luma), U or V planes.
+
+    file=path
+        Load the given file as Lua chunks. It can define additional functions,
+        which can be used by the fn expressions. It's also possible to replace
+        the normal filter process, but this is non-trivial. (See vf_lua_lib.lua
+        source for how things are done.)
+
+    lut=expr
+        Generate a lookup table from the given expression. If this option is
+        passed, but no fn option is provided, each color value is put through
+        the lookup table.
+
+        Just like with the fn options, there are lut_y/lut_u/lut_v variants
+        available.
+
+        The functionality this option provides is a subset of that of the fn
+        option, except that it might be faster in some situations.
+
+    rgb
+        If specified, only accept RGB input. By default, only YUV colorspaces
+        are accepted. In RGB mode, the fn expressions must return a tuple of
+        three color values.
+
+    config=expr
+        Set the dimensions of the filtered image. The expression must return a
+        tuple specifiying the new width and height. The variables ``width`` and
+        ``height`` are predefined and contain the dimensions of the source
+        image.
 
     Pixel values are in the range 0-1, and results are clipped to fit into this
     range. Pixel coordinates are in integers, and are clipped against the plane
-    size. Fractional parts are trunciated.
+    size. Fractional parts are truncated.
 
-    The following values are predefined:
+    The following values are predefined in the fn expressions:
 
-    :x / y:             the coordinates of the current pixel (as integer)
-    :p(x,y):            returns the value of the pixel at location x/y of the
-                        current plane
-    :fx / fy:           coordinates in range [0, 1)
-    :pf(fx,fy):         pixel at location x/y with coordinates in range [0, 1)
-    :width / height:    width and height of the image
-    :sw / sh:           width/height scale depending on the currently filtered
-                        plane, e.g. 1,1 and 0.5,0.5 for YUV 4:2:0
+    :c:             the current color value in YUV mode
+    :r / g / b:     the current color value in RGB mode
+    :x / y:         the coordinates of the current pixel (as integer)
+    :p(x,y):        returns the value of the pixel at location x/y of the
+                    current plane
+    :pw / ph:       width/height of the current plane
+    :px(p,x,y):     returns the value of the pixel at location x/y of the
+                    p-th plane (1 is Y, 2 is U, 3 is V)
+    :sw / sh:       width/height scale depending on the currently filtered
+                    plane, e.g. 1,1 and 0.5,0.5 for YUV 4:2:0
+    :src.width:     global width of the image (equals to size of the Y plane)
+    :src.height:    height, as above
 
     Additionally, anything in math is guaranteed to be available, e.g. math.pi
     for the number pi.
 
-    If a file argument is specified, the file is loaded as Lua chunk. It can
-    define a function named filter_image. This function is called on every new
-    image, and can access the global variables src and dst, which contain the
-    source and destination images. This requires writing non-trivial Lua code,
-    and learning how things are done by looking at the vf_lua_lib.lua souce
-    file.
-
-    The file argument can also be used to define functions and values to be
-    used by expressions passed via the normal fn* options.
-
     It should be understood that the Lua scripts and expressions are not
     sandboxed, and only trusted scripts should be used.
+
+    Examples:
+        invert
+            --vf=lua=fn=1-c
+        invert (slightly faster)
+            --vf=lua=lut=1-c
+        flip
+            --vf=lua=p(x\,ph-y-1)
+            Note that ph is the border just outside the image, and y runs from 0
+            to (ph-1).
+        swap U/V planes
+            --vf=lua=fn_u=px(3\,x\,y):fn_v=px(2\,x\,y)
+        rotate
+            --vf=lua==fn=p(y\,x):config=height\,width
 
 test
     Generate various test patterns.

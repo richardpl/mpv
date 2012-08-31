@@ -1,10 +1,13 @@
 -- This script is loaded by vf_lua.
+-- For copyright information see vf_lua.c.
 
 MAX_PLANES = 3
 
 -- Prefixed to the user's expressions to create pixel functions.
 -- Basically define what arguments are passed to the function directly.
-PIXEL_FN_PRELUDE = "local x, y, fx, fy, r, g, b = ...; local c = r ; return "
+PIXEL_FN_PRELUDE = "local x, y, r, g, b = ...; local c = r ; return "
+CONFIG_FN_PRELUDE = "local width, height = ... ; return "
+LUT_FN_PRELUDE = "local c = ... ; return "
 
 local ffi = require('ffi')
 
@@ -13,24 +16,19 @@ local ffi = require('ffi')
 --require('v').start('yourlogdump.txt')
 
 -- These are filled by the C code (and _prepare_filter) by default.
-width = 0
-height = 0
-plane_count = 0
 dst = {}
 src = {}
 
-px_fns = {}
 for n = 1, MAX_PLANES do
     dst[n] = {}
     src[n] = {}
 end
 
+-- Called by the C code, after it has set the fields in _G.src and _G.dst.
 function _prepare_filter()
-    _G.width = src.width
-    _G.height = src.height
     local function prepare_image(img)
         local px_pack, px_unpack
-        if img.packed_rgb then
+        if img[1].packed_rgb then
             px_pack, px_unpack = _px_pack_rgb32, _px_unpack_rgb32
         else
             px_pack, px_unpack = _px_pack_planar, _px_unpack_planar
@@ -91,39 +89,62 @@ function plane_clip(plane, x, y)
     return x, y
 end
 
-function px(plane_nr, x, y)
-    local plane = src[plane_nr]
+function plane_px(plane, x, y)
     x, y = plane_clip(plane, x, y)
     return _px_noclip(plane, x, y)
 end
 
-function pxf(plane_nr, x, y)
-    local plane = src[plane_nr]
-    x = x * plane.width
-    y = y * plane.height
-    x, y = plane_clip(plane, x, y)
-    return _px_noclip(plane, x, y)
+function px(plane_nr, x, y)
+    return plane_px(src[plane_nr], x, y)
+end
+
+-- Setup the environment for the pixel function, i.e. things that the pixel
+-- function can access, without dragging it around as function parameter.
+local function _setup_fenv(dst, src, pixel_fn)
+    -- Re-using the global environment might be slightly unclean, but is
+    -- simple - one consequence is that LuaJIT might have to recompile the
+    -- inner loop that follows.
+    local fn_env = _G
+    fn_env.p = function(x, y) return px(src.plane_nr, x, y) end
+    fn_env.pw = src.width
+    fn_env.ph = src.height
+    fn_env.sw = src.scale_x
+    fn_env.sh = src.scale_y
+end
+
+-- This is a micro-optimization: passing "c" instead of calling "p(x,y)" on
+-- each pixel is slightly faster. It's probably not very important; remove it
+-- if it's annoying, and use _filter_plane() instead.
+function _filter_plane_noscale(dst, src, pixel_fn)
+    _setup_fenv(dst, src, pixel_fn)
+
+    for y = 0, dst.height - 1 do
+        local src_ptr = ffi.cast(src.pixel_ptr_type, src.ptr + src.stride * y)
+        local dst_ptr = ffi.cast(dst.pixel_ptr_type, dst.ptr + dst.stride * y)
+        for x = 0, dst.width - 1 do
+            dst_ptr[x] = dst:_px_pack(pixel_fn(x, y, src:_px_unpack(src_ptr[x])))
+        end
+    end
 end
 
 function _filter_plane(dst, src, pixel_fn)
-    -- Setup the environment for the pixel function (re-using the global
-    -- environment might be slightly unclean, but is simple - one consequence
-    -- is that LuaJIT will only JIT the following inner loop).
-    _G.p = function(x, y) return px(src.plane_nr, x, y) end
-    _G.pf = function(x, y) return pxf(src.plane_nr, x, y) end
-    _G.pw = src.width
-    _G.ph = src.height
-    _G.sw = src.scale_x
-    _G.sh = src.scale_y
+    _setup_fenv(dst, src, pixel_fn)
 
+    for y = 0, dst.height - 1 do
+        local dst_ptr = ffi.cast(dst.pixel_ptr_type, dst.ptr + dst.stride * y)
+        for x = 0, dst.width - 1 do
+            local r, g, b = plane_px(src, x, y)
+            dst_ptr[x] = dst:_px_pack(pixel_fn(x, y, r, g, b))
+        end
+    end
+end
+
+local function _lut_filter_plane(dst, src, lut)
     for y = 0, src.height - 1 do
         local src_ptr = ffi.cast(src.pixel_ptr_type, src.ptr + src.stride * y)
         local dst_ptr = ffi.cast(dst.pixel_ptr_type, dst.ptr + dst.stride * y)
-        local fy = y / src.height
         for x = 0, src.width - 1 do
-            local fx = x / src.width
-            dst_ptr[x] = dst:_px_pack(pixel_fn(x, y, fx, fy,
-                                               src:_px_unpack(src_ptr[x])))
+            dst_ptr[x] = lut[src_ptr[x]]
         end
     end
 end
@@ -135,12 +156,72 @@ function copy_plane(dst, src)
     end
 end
 
+local function _get_lut(dst, src, i)
+    if not plane_lut then
+        _G.plane_lut = {}
+    end
+    if not plane_lut[i] then
+        assert(src[1].imgfmt == dst[1].imgfmt,
+               "lut requires src format = dst format")
+        assert(src.width == dst.width and src.height == dst.height,
+              "lut requires equal image dimensions for src and dst")
+        plane_lut[i] = generate_lut(src[1], plane_lut_fn[i])
+    end
+    return plane_lut[i]
+end
+
+-- This is called each time a new image is to be filtered.
 function filter_image()
     for i = 1, src.plane_count do
-        if plane_fn and plane_fn[i] then
-            _filter_plane(dst[i], src[i], plane_fn[i])
+        local psrc, pdst = src[i], dst[i]
+        if plane_fn[i] then
+            if psrc.width == pdst.width and psrc.height == pdst.height then
+                _filter_plane_noscale(pdst, psrc, plane_fn[i])
+            else
+                _filter_plane(pdst, psrc, plane_fn[i])
+            end
+        elseif plane_lut_fn[i] then
+            _lut_filter_plane(pdst, psrc, _get_lut(dst, src, i))
         else
-            copy_plane(dst[i], src[i])
+            copy_plane(pdst, psrc)
         end
     end
+end
+
+-- fn: lookup function, works in the range [0, 1]
+function generate_lut(plane, fn)
+    assert(not plane.packed_rgb, "lut doesn't work on packed RGB")
+
+    local bpp = plane.bytes_per_pixel
+    local max = plane.max
+
+    local type
+    if bpp == 1 then
+        type = "uint8_t"
+    elseif bpp == 2 then
+        type = "uint16_t"
+    else
+        error("unsupported LUT size: " .. bpp)
+    end
+    local lut_size = bit.lshift(1, ffi.sizeof(type) * 8)
+    assert(max >= 0 and max < lut_size)
+    local lut = ffi.new(type .. "[?]", lut_size)
+    for n = 0, max do
+        lut[n] = plane:_px_pack(fn(plane:_px_unpack(n)))
+    end
+    return lut
+end
+
+-- The is called on each config() call.
+function config(width, height, d_width, d_height)
+    -- invalidate previous things
+    _G.lut = nil
+
+    if config_fn then
+        width, height = config_fn(width, height)
+        d_width = width
+        d_height = height
+    end
+
+    return width, height, d_width, d_height
 end

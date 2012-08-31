@@ -4,7 +4,7 @@ MAX_PLANES = 3
 
 -- Prefixed to the user's expressions to create pixel functions.
 -- Basically define what arguments are passed to the function directly.
-PIXEL_FN_PRELUDE = "local x, y, fx, fy, c = ...; return "
+PIXEL_FN_PRELUDE = "local x, y, fx, fy, r, g, b = ...; local c = r ; return "
 
 local ffi = require('ffi')
 
@@ -29,16 +29,51 @@ function _prepare_filter()
     _G.width = src.width
     _G.height = src.height
     local function prepare_image(img)
+        local px_pack, px_unpack
+        if img.packed_rgb then
+            px_pack, px_unpack = _px_pack_rgb32, _px_unpack_rgb32
+        else
+            px_pack, px_unpack = _px_pack_planar, _px_unpack_planar
+        end
         for i = 1, img.plane_count do
             img[i].scale_x = img[i].width / img.width
             img[i].scale_y = img[i].height / img.height
             -- Can't do this type conversion with the C API.
             -- Also, doing the cast in an inner loop makes it slow.
             img[i].ptr = ffi.cast('uint8_t*', img[i].ptr)
+            img[i]._px_pack = px_pack
+            img[i]._px_unpack = px_unpack
         end
     end
     prepare_image(src)
     prepare_image(dst)
+end
+
+function _px_pack_rgb32(plane, r, g, b)
+    r = math.max(math.min(r, 1), 0) * plane.max
+    g = math.max(math.min(g, 1), 0) * plane.max
+    b = math.max(math.min(b, 1), 0) * plane.max
+    g = bit.lshift(g, 8)
+    b = bit.lshift(b, 16)
+    return bit.bor(r, bit.bor(g, b))
+end
+
+function _px_unpack_rgb32(plane, raw)
+    local r = bit.band(raw, 0xFF)
+    local g = bit.band(bit.rshift(raw, 8), 0xFF)
+    local b = bit.band(bit.rshift(raw, 16), 0xFF)
+    r = r / plane.max
+    g = g / plane.max
+    b = b / plane.max
+    return r, g, b
+end
+
+function _px_pack_planar(plane, c)
+    return math.max(math.min(c, 1), 0) * plane.max
+end
+
+function _px_unpack_planar(plane, c)
+    return c / plane.max
 end
 
 function plane_rowptr(plane, y)
@@ -46,7 +81,7 @@ function plane_rowptr(plane, y)
 end
 
 local function _px_noclip(plane, x, y)
-    return plane_rowptr(plane, y)[x] / plane.max
+    return plane:_px_unpack(plane_rowptr(plane, y)[x])
 end
 
 function plane_clip(plane, x, y)
@@ -86,9 +121,8 @@ function _filter_plane(dst, src, pixel_fn)
         local fy = y / src.height
         for x = 0, src.width - 1 do
             local fx = x / src.width
-            local res = pixel_fn(x, y, fx, fy, src_ptr[x] / src.max)
-            res = math.max(math.min(res, 1), 0)
-            dst_ptr[x] = res * dst.max
+            dst_ptr[x] = dst:_px_pack(pixel_fn(x, y, fx, fy,
+                                               src:_px_unpack(src_ptr[x])))
         end
     end
 end

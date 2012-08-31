@@ -64,8 +64,15 @@ static void uninit(struct vf_instance *vf)
 // Lua stack: p (Lua table for image)
 static void set_lua_mpi_fields(lua_State *L, mp_image_t *mpi)
 {
-    int chroma_xs, chroma_ys, bits;
-    mp_get_chroma_shift(mpi->imgfmt, &chroma_xs, &chroma_ys, &bits);
+    int chroma_xs = 0, chroma_ys = 0, bits, bpp;
+    bool packed_rgb = mpi->imgfmt == IMGFMT_RGB32;
+    if (packed_rgb) {
+        bits = 8;
+        bpp = 32;
+    } else {
+        mp_get_chroma_shift(mpi->imgfmt, &chroma_xs, &chroma_ys, &bits);
+        bpp = bits;
+    }
 
     for (int n = 0; n < PLANES; n++) {
         lua_pushinteger(L, n + 1); // p n
@@ -93,17 +100,19 @@ static void set_lua_mpi_fields(lua_State *L, mp_image_t *mpi)
         lua_setfield(L, -2, "height");
 
         const char *pixel_ptr_type;
-        if (bits <= 8) {
+        if (bpp <= 8) {
             pixel_ptr_type = "uint8_t*";
-        } else if (bits <= 16) {
+        } else if (bpp <= 16) {
             pixel_ptr_type = "uint16_t*";
+        } else if (bpp <= 32) {
+            pixel_ptr_type = "uint32_t*";
         } else {
             abort();
         }
         lua_pushstring(L, valid ? pixel_ptr_type : "");
         lua_setfield(L, -2, "pixel_ptr_type");
 
-        lua_pushinteger(L, valid ? ((bits + 7) / 8) : 0);
+        lua_pushinteger(L, valid ? ((bpp + 7) / 8) : 0);
         lua_setfield(L, -2, "bytes_per_pixel");
 
         int max = (1 << bits) - 1;
@@ -118,6 +127,9 @@ static void set_lua_mpi_fields(lua_State *L, mp_image_t *mpi)
 
     lua_pushinteger(L, mpi->h);
     lua_setfield(L, -2, "height");
+
+    lua_pushboolean(L, packed_rgb);
+    lua_setfield(L, -2, "packed_rgb");
 
     lua_pushinteger(L, mpi->num_planes);
     lua_setfield(L, -2, "plane_count");
@@ -180,7 +192,7 @@ static int put_image(struct vf_instance *vf, mp_image_t *mpi, double pts)
 
 static int query_format(struct vf_instance *vf, unsigned int fmt)
 {
-    if (mp_get_chroma_shift(fmt, NULL, NULL, NULL) == 0)
+    if (mp_get_chroma_shift(fmt, NULL, NULL, NULL) == 0 && fmt != IMGFMT_RGB32)
         return 0;
     return vf_next_query_format(vf, fmt);
 }
@@ -221,10 +233,8 @@ static int vf_open(vf_instance_t *vf, char *args)
                 expr = vf->priv->cfg_fn;
             if (expr && expr[0]) {
                 lua_getglobal(L, "PIXEL_FN_PRELUDE"); // t s
-                lua_pushstring(L, "("); // t s*2
-                lua_pushstring(L, expr); // t s*3
-                lua_pushstring(L, ")"); // t s*4
-                lua_concat(L, 4); // t s
+                lua_pushstring(L, expr); // t s*2
+                lua_concat(L, 2); // t s
                 const char *s = lua_tostring(L, -1); // t s
                 if (luaL_loadstring(L, s))
                     goto lua_error;

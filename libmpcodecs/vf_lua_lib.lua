@@ -38,6 +38,7 @@ function _prepare_filter()
         for i = 1, img.plane_count do
             img[i].scale_x = img[i].width / img.width
             img[i].scale_y = img[i].height / img.height
+            img[i].inv_max = 1 / img[i].max
             -- Can't do this type conversion with the C API.
             -- Also, doing the cast in an inner loop makes it slow.
             img[i].ptr = ffi.cast('uint8_t*', img[i].ptr)
@@ -62,9 +63,9 @@ function _px_unpack_rgb32(plane, raw)
     local r = bit.band(raw, 0xFF)
     local g = bit.band(bit.rshift(raw, 8), 0xFF)
     local b = bit.band(bit.rshift(raw, 16), 0xFF)
-    r = r / plane.max
-    g = g / plane.max
-    b = b / plane.max
+    r = r * plane.inv_max
+    g = g * plane.inv_max
+    b = b * plane.inv_max
     return r, g, b
 end
 
@@ -73,7 +74,7 @@ function _px_pack_planar(plane, c)
 end
 
 function _px_unpack_planar(plane, c)
-    return c / plane.max
+    return c * plane.inv_max
 end
 
 function plane_rowptr(plane, y)

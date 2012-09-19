@@ -260,12 +260,43 @@ const char *image_writer_file_ext(const struct image_writer_opts *opts)
     return get_writer(opts)->file_ext;
 }
 
+struct mp_image *convert_image_maybe(struct mp_image *image,
+                                     const struct mp_csp_details *csp,
+                                     int mp_fmt)
+{
+    bool is_anamorphic = image->w != image->width || image->h != image->height;
+    if (image->imgfmt == mp_fmt && !is_anamorphic)
+        return image;
+
+    struct mp_image *dst = alloc_mpi(image->w, image->h, mp_fmt);
+
+    struct SwsContext *sws = sws_getContextFromCmdLine_hq(image->width,
+                                                            image->height,
+                                                            image->imgfmt,
+                                                            dst->width,
+                                                            dst->height,
+                                                            dst->imgfmt);
+
+    struct mp_csp_details colorspace = MP_CSP_DETAILS_DEFAULTS;
+    if (csp)
+        colorspace = *csp;
+    // This is a property of the output device; images always use
+    // full-range RGB.
+    colorspace.levels_out = MP_CSP_LEVELS_PC;
+    mp_sws_set_colorspace(sws, &colorspace);
+
+    sws_scale(sws, (const uint8_t **)image->planes, image->stride, 0,
+                image->height, dst->planes, dst->stride);
+
+    sws_freeContext(sws);
+
+    return dst;
+}
+
 int write_image(struct mp_image *image, const struct mp_csp_details *csp,
                 const struct image_writer_opts *opts, const char *filename)
 {
-    struct mp_image *allocated_image = NULL;
     struct image_writer_opts defs = image_writer_opts_defaults;
-    bool is_anamorphic = image->w != image->width || image->h != image->height;
 
     if (!opts)
         opts = &defs;
@@ -284,32 +315,7 @@ int write_image(struct mp_image *image, const struct mp_csp_details *csp,
         }
     }
 
-    if (image->imgfmt != destfmt || is_anamorphic) {
-        struct mp_image *dst = alloc_mpi(image->w, image->h, destfmt);
-
-        struct SwsContext *sws = sws_getContextFromCmdLine_hq(image->width,
-                                                              image->height,
-                                                              image->imgfmt,
-                                                              dst->width,
-                                                              dst->height,
-                                                              dst->imgfmt);
-
-        struct mp_csp_details colorspace = MP_CSP_DETAILS_DEFAULTS;
-        if (csp)
-            colorspace = *csp;
-        // This is a property of the output device; images always use
-        // full-range RGB.
-        colorspace.levels_out = MP_CSP_LEVELS_PC;
-        mp_sws_set_colorspace(sws, &colorspace);
-
-        sws_scale(sws, (const uint8_t **)image->planes, image->stride, 0,
-                  image->height, dst->planes, dst->stride);
-
-        sws_freeContext(sws);
-
-        allocated_image = dst;
-        image = dst;
-    }
+    struct mp_image *new_image = convert_image_maybe(image, csp, destfmt);
 
     FILE *fp = fopen(filename, "wb");
     int success = 0;
@@ -317,14 +323,15 @@ int write_image(struct mp_image *image, const struct mp_csp_details *csp,
         mp_msg(MSGT_CPLAYER, MSGL_ERR,
                "Error opening '%s' for writing!\n", filename);
     } else {
-        success = writer->write(&ctx, image, fp);
+        success = writer->write(&ctx, new_image, fp);
         success = !fclose(fp) && success;
         if (!success)
             mp_msg(MSGT_CPLAYER, MSGL_ERR, "Error writing file '%s'!\n",
                    filename);
     }
 
-    free_mp_image(allocated_image);
+    if (new_image != image)
+        free_mp_image(new_image);
 
     return success;
 }

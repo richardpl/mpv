@@ -48,3 +48,7 @@ const char *image_writer_file_ext(const struct image_writer_opts *opts);
  */
 int write_image(struct mp_image *image, const struct mp_csp_details *csp,
                 const struct image_writer_opts *opts, const char *filename);
+
+struct mp_image *convert_image_maybe(struct mp_image *image,
+                                     const struct mp_csp_details *csp,
+                                     int mp_fmt);

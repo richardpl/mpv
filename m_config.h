@@ -152,6 +152,17 @@ int m_config_parse_suboptions(struct m_config *config, char *name,
 const struct m_option *m_config_get_option(const struct m_config *config,
                                            struct bstr name);
 
+/*  Map options like "no-opt=" to "opt=no".
+ *  \param config The config object.
+ *  \param name The option's name. Returns the new name.
+ *  \param param The option value. Returns the new value.
+ *  \return The following error codes:
+ *          M_OPT_UNKNOWN: option not found
+ *          M_OPT_INVALID: parameter non-empty in map case, prevents the mapping
+ *          0: success, *name and *param have been changed (or not)
+ */
+int m_config_map_option(struct m_config *config, bstr *name, bstr *param);
+
 /*  Print a list of all registered options.
  *  \param config The config object.
  */

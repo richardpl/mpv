@@ -684,7 +684,7 @@ static int parse_str_list(const m_option_t *opt, struct bstr name,
     }
 
     // Clear the list ??
-    if (op == OP_CLR) {
+    if (op == OP_CLR || (op == OP_NONE && param.len == 0)) {
         if (dst)
             free_str_list(dst);
         return 0;
@@ -1533,7 +1533,7 @@ static int parse_obj_settings_list(const m_option_t *opt, struct bstr name,
     }
 
     // Clear the list ??
-    if (op == OP_CLR) {
+    if (op == OP_CLR || (op == OP_NONE && param.len == 0)) {
         if (dst)
             free_obj_settings_list(dst);
         return 0;

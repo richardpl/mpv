@@ -24,9 +24,6 @@ filter list.
     Deletes the filters at the given indexes. Index numbers start at 0,
     negative numbers address the end of the list (-1 is the last).
 
---af-clr
-    Completely empties the filter list.
-
 Available filters are:
 
 resample[=srate[:sloppy[:type]]]

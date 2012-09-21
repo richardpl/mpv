@@ -29,9 +29,6 @@ filter list.
     Deletes the filters at the given indexes. Index numbers start at 0,
     negative numbers address the end of the list (-1 is the last).
 
---vf-clr
-    Completely empties the filter list.
-
 With filters that support it, you can access parameters by their name.
 
 --vf=<filter>=help

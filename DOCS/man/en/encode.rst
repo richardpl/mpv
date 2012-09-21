@@ -30,9 +30,6 @@ You can encode files from one format/codec to another using this facility.
         Deletes the options at the given indexes. Index numbers start at 0,
         negative numbers address the end of the list (-1 is the last).
 
-    --ofopts-clr
-        Completely empties the options list.
-
 --ofps=<float value>
     Specifies the output format time base (default: 24000). Low values like 25
     limit video fps by dropping frames.
@@ -83,9 +80,6 @@ You can encode files from one format/codec to another using this facility.
         Deletes the options at the given indexes. Index numbers start at 0,
         negative numbers address the end of the list (-1 is the last).
 
-    --oacopts-clr
-        Completely empties the options list.
-
 --ovc=<codec>
     Specifies the output video codec.
     See --ovc=help for a full list of supported codecs.
@@ -129,6 +123,3 @@ You can encode files from one format/codec to another using this facility.
     --ovcopts-del=<index1[,index2,...]>
         Deletes the options at the given indexes. Index numbers start at 0,
         negative numbers address the end of the list (-1 is the last).
-
-    --ovcopts-clr
-        Completely empties the options list.

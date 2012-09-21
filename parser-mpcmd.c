@@ -75,16 +75,14 @@ static int split_opt_silent(struct parse_state *p)
         return split_opt_silent(p);
     }
 
-    bool old_syntax = !bstr_startswith0(p->arg, "--");
-    if (old_syntax) {
-        p->arg = bstr_cut(p->arg, 1);
-    } else {
-        p->arg = bstr_cut(p->arg, 2);
-        int idx = bstrchr(p->arg, '=');
-        if (idx > 0) {
-            p->param = bstr_cut(p->arg, idx + 1);
-            p->arg = bstr_splice(p->arg, 0, idx);
-        }
+    if (!bstr_eatstart0(&p->arg, "--"))
+        bstr_eatstart0(&p->arg, "-");
+
+    int idx = bstrchr(p->arg, '=');
+    bool direct_param = idx > 0;
+    if (direct_param) {
+        p->param = bstr_cut(p->arg, idx + 1);
+        p->arg = bstr_splice(p->arg, 0, idx);
     }
 
     if (m_config_map_option(p->config, &p->arg, &p->param) == M_OPT_INVALID)
@@ -95,13 +93,12 @@ static int split_opt_silent(struct parse_state *p)
         return -1;
 
     if ((p->mp_opt->type->flags & M_OPT_TYPE_OLD_SYNTAX_NO_PARAM)
-        || p->param.len
         || bstr_endswith0(p->arg, "-clr"))
     {
-        old_syntax = false;
+        direct_param = true;
     }
 
-    if (old_syntax) {
+    if (!direct_param) {
         if (p->argc < 1)
             return -3;
         p->param = bstr0(p->argv[0]);

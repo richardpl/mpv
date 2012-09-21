@@ -148,10 +148,13 @@ int m_config_parse_config_file(m_config_t *config, const char *conffile)
             ++line_pos;
 
         param_pos = 0;
+        bool param_set = false;
 
         /* check '=' */
         if (line[line_pos] == '=') {
             line_pos++;
+            param_set = true;
+
             /* whitespaces... */
             while (isspace(line[line_pos]))
                 ++line_pos;
@@ -202,14 +205,38 @@ int m_config_parse_config_file(m_config_t *config, const char *conffile)
             ret = -1;
         }
 
+        bstr bopt = bstr0(opt);
+        bstr bparam = bstr0(param);
+
+        if (m_config_map_option(config, &bopt, &bparam) == M_OPT_INVALID) {
+            mp_msg(MSGT_CFGPARSER, MSGL_ERR,
+                   "Error parsing option %s=%s at line %d: "
+                   "option doesn't take a parameter\n",
+                   opt, param, line_num);
+            ret = -1;
+            errors++;
+            continue;
+        }
+
+        const struct m_option *popt = m_config_get_option(config, bopt);
+        if (popt && (!param_set && !(popt->type->flags & M_OPT_TYPE_OLD_SYNTAX_NO_PARAM))) {
+            mp_msg(MSGT_CFGPARSER, MSGL_ERR,
+                   "Error parsing option %s at line %d: "
+                   "option requires a parameter\n",
+                   opt, line_num);
+            ret = -1;
+            errors++;
+            continue;
+        }
+
         if (profile) {
             if (!strcmp(opt, "profile-desc"))
                 m_profile_set_desc(profile, param), tmp = 1;
             else
                 tmp = m_config_set_profile_option(config, profile,
-                                                  opt, param);
+                                                  bopt, bparam);
         } else
-            tmp = m_config_set_option0(config, opt, param);
+            tmp = m_config_set_option(config, bopt, bparam);
         if (tmp < 0) {
             PRINT_LINENUM;
             if (tmp == M_OPT_UNKNOWN) {

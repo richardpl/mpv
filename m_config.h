@@ -201,7 +201,7 @@ void m_profile_set_desc(struct m_profile *p, char *desc);
  *  \param val The option's value.
  */
 int m_config_set_profile_option(struct m_config *config, struct m_profile *p,
-                                char *name, char *val);
+                                bstr name, bstr val);
 
 /*  Enables profile usage
  *  Used by the config file parser when loading a profile.

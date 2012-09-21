@@ -617,14 +617,14 @@ void m_profile_set_desc(struct m_profile *p, char *desc)
 }
 
 int m_config_set_profile_option(struct m_config *config, struct m_profile *p,
-                                char *name, char *val)
+                                bstr name, bstr val)
 {
-    int i = m_config_check_option0(config, name, val);
+    int i = m_config_check_option(config, name, val);
     if (i < 0)
         return i;
     p->opts = talloc_realloc(p, p->opts, char *, 2 * (p->num_opts + 2));
-    p->opts[p->num_opts * 2] = talloc_strdup(p, name);
-    p->opts[p->num_opts * 2 + 1] = talloc_strdup(p, val);
+    p->opts[p->num_opts * 2] = bstrdup0(p, name);
+    p->opts[p->num_opts * 2 + 1] = bstrdup0(p, val);
     p->num_opts++;
     p->opts[p->num_opts * 2] = p->opts[p->num_opts * 2 + 1] = NULL;
     return 1;

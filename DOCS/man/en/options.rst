@@ -37,8 +37,8 @@
 --af=<filter1[=parameter1:parameter2:...],filter2,...>
     Specify a list of audio filters to apply to the audio stream. See
     :ref:`audio_filters` for details and descriptions of the available filters.
-    The option variants ``--af-add``, ``--af-pre``, ``--af-del`` and
-    ``--af-clr`` exist to modify a previously specified list, but you
+    The option variants ``--af-add``, ``--af-pre`` and ``--af-del``
+    exist to modify a previously specified list, but you
     shouldn't need these for typical use.
 
 --af-adv=<force=(0-7):list=(filters)>
@@ -2247,8 +2247,8 @@
 --vf=<filter1[=parameter1:parameter2:...],filter2,...>
     Specify a list of video filters to apply to the video stream. See
     :ref:`video_filters` for details and descriptions of the available filters.
-    The option variants ``--vf-add``, ``--vf-pre``, ``--vf-del`` and
-    ``--vf-clr`` exist to modify a previously specified list, but you
+    The option variants ``--vf-add``, ``--vf-pre`` and ``--vf-del``
+    exist to modify a previously specified list, but you
     shouldn't need these for typical use.
 
 --vfm=<driver1,driver2,...>

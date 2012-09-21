@@ -92,9 +92,7 @@ static int split_opt_silent(struct parse_state *p)
     if (!p->mp_opt)
         return -1;
 
-    if ((p->mp_opt->type->flags & M_OPT_TYPE_OLD_SYNTAX_NO_PARAM)
-        || bstr_endswith0(p->arg, "-clr"))
-    {
+    if ((p->mp_opt->type->flags & M_OPT_TYPE_OLD_SYNTAX_NO_PARAM)) {
         direct_param = true;
     }
 

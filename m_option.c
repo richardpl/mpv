@@ -543,7 +543,6 @@ const m_option_type_t m_option_type_string = {
 #define OP_ADD 1
 #define OP_PRE 2
 #define OP_DEL 3
-#define OP_CLR 4
 
 static void free_str_list(void *dst)
 {
@@ -677,14 +676,12 @@ static int parse_str_list(const m_option_t *opt, struct bstr name,
             op = OP_PRE;
         else if (bstrcasecmp0(suffix, "-del") == 0)
             op = OP_DEL;
-        else if (bstrcasecmp0(suffix, "-clr") == 0)
-            op = OP_CLR;
         else
             return M_OPT_UNKNOWN;
     }
 
     // Clear the list ??
-    if (op == OP_CLR || (op == OP_NONE && param.len == 0)) {
+    if (op == OP_NONE && param.len == 0) {
         if (dst)
             free_str_list(dst);
         return 0;
@@ -794,7 +791,6 @@ const m_option_type_t m_option_type_string_list = {
      *     -add: Add the given parameters at the end of the list.
      *     -pre: Add the given parameters at the beginning of the list.
      *     -del: Remove the entry at the given indices.
-     *     -clr: Clear the list.
      * e.g: -vf-add flip,mirror -vf-del 2,5
      */
     .name  = "String list",
@@ -1508,8 +1504,6 @@ static int parse_obj_settings_list(const m_option_t *opt, struct bstr name,
             op = OP_PRE;
         else if (bstrcasecmp0(suffix, "-del") == 0)
             op = OP_DEL;
-        else if (bstrcasecmp0(suffix, "-clr") == 0)
-            op = OP_CLR;
         else {
             char prefix[len];
             strncpy(prefix, opt->name, len - 1);
@@ -1523,17 +1517,15 @@ static int parse_obj_settings_list(const m_option_t *opt, struct bstr name,
                    " Prepend the given list to the current list\n\n"
                    "  %s-del x,y,...\n"
                    " Remove the given elements. Take the list element index (starting from 0).\n"
-                   " Negative index can be used (i.e. -1 is the last element)\n\n"
-                   "  %s-clr\n"
-                   " Clear the current list.\n",
-                   BSTR_P(name), BSTR_P(suffix), prefix, prefix, prefix, prefix);
+                   " Negative index can be used (i.e. -1 is the last element)\n",
+                   BSTR_P(name), BSTR_P(suffix), prefix, prefix, prefix);
 
             return M_OPT_UNKNOWN;
         }
     }
 
     // Clear the list ??
-    if (op == OP_CLR || (op == OP_NONE && param.len == 0)) {
+    if (op == OP_NONE && param.len == 0) {
         if (dst)
             free_obj_settings_list(dst);
         return 0;

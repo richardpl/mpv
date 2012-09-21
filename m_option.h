@@ -358,10 +358,11 @@ struct m_option {
  */
 #define M_OPT_TYPE_DYNAMIC              (1 << 2)
 
-// The parameter is optional and by default no parameter is preferred. If the
-// "old syntax" is used, the command line parser will assume that the argument
-// takes no parameter.
-#define M_OPT_TYPE_OLD_SYNTAX_NO_PARAM  (1 << 3)
+// The parameter is optional and by default no parameter is preferred. If
+// ambiguous syntax is used ("--opt value"), the command line parser will
+// assume that the argument takes no parameter. In config files, these
+// options can be used without "=" and value.
+#define M_OPT_TYPE_OPTIONAL_PARAM       (1 << 3)
 
 // modify M_OPT_TYPE_HAS_CHILD so that m_option::p points to
 // struct m_sub_options, instead of a direct m_option array.

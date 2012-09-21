@@ -124,7 +124,7 @@ const m_option_type_t m_option_type_flag = {
     // need yes or no in config files
     .name  = "Flag",
     .size  = sizeof(int),
-    .flags = M_OPT_TYPE_OLD_SYNTAX_NO_PARAM,
+    .flags = M_OPT_TYPE_OPTIONAL_PARAM,
     .parse = parse_flag,
     .print = print_flag,
     .copy  = copy_opt,
@@ -151,7 +151,7 @@ const m_option_type_t m_option_type_store = {
     // can only be activated
     .name  = "Flag",
     .size  = sizeof(int),
-    .flags = M_OPT_TYPE_OLD_SYNTAX_NO_PARAM,
+    .flags = M_OPT_TYPE_OPTIONAL_PARAM,
     .parse = parse_store,
 };
 
@@ -826,7 +826,7 @@ static int parse_print(const m_option_t *opt, struct bstr name,
 
 const m_option_type_t m_option_type_print = {
     .name  = "Print",
-    .flags = M_OPT_TYPE_OLD_SYNTAX_NO_PARAM,
+    .flags = M_OPT_TYPE_OPTIONAL_PARAM,
     .parse = parse_print,
 };
 
@@ -838,7 +838,7 @@ const m_option_type_t m_option_type_print_func_param = {
 
 const m_option_type_t m_option_type_print_func = {
     .name  = "Print",
-    .flags = M_OPT_TYPE_ALLOW_WILDCARD | M_OPT_TYPE_OLD_SYNTAX_NO_PARAM,
+    .flags = M_OPT_TYPE_ALLOW_WILDCARD | M_OPT_TYPE_OPTIONAL_PARAM,
     .parse = parse_print,
 };
 

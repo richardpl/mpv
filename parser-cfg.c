@@ -219,7 +219,9 @@ int m_config_parse_config_file(m_config_t *config, const char *conffile)
         }
 
         const struct m_option *popt = m_config_get_option(config, bopt);
-        if (popt && (!param_set && !(popt->type->flags & M_OPT_TYPE_OLD_SYNTAX_NO_PARAM))) {
+        if (popt && !param_set &&
+            !(popt->type->flags & M_OPT_TYPE_OPTIONAL_PARAM))
+        {
             mp_msg(MSGT_CFGPARSER, MSGL_ERR,
                    "Error parsing option %s at line %d: "
                    "option requires a parameter\n",

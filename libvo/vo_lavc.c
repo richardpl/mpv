@@ -611,7 +611,9 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
             endRow = sb->y + sb->dh;
     }
     firstRow &= ~((1 << dst->chroma_y_shift) - 1);
+    --endRow;
     endRow |= (1 << dst->chroma_y_shift) - 1;
+    ++endRow;
 
     if (firstRow < 0)
         firstRow = 0;

@@ -193,7 +193,7 @@ static int query_format(struct vo *vo, uint32_t format)
         return 0;
 
     return encode_lavc_supports_pixfmt(vo->encode_lavc_ctx, pix_fmt) ?
-           VFCAP_CSP_SUPPORTED : 0;
+           VFCAP_CSP_SUPPORTED | VFCAP_OSD : 0;
 }
 
 static void write_packet(struct vo *vo, int size, AVPacket *packet)

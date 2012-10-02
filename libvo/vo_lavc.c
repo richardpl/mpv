@@ -579,7 +579,8 @@ static void blend_src_with_alpha(uint16_t *dst, ssize_t dstRowStride, const uint
             uint16_t dstp = dstr[j];
             uint16_t srcp = srcr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
-            uint16_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255;
+            // uint16_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255; // separate alpha GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+            uint16_t outp = srcp + (dstp * (255 - srcap)) / 255; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
     }

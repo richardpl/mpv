@@ -593,12 +593,12 @@ static void blend_with_alpha(uint16_t *dst, ssize_t dstRowStride, ssize_t dstPix
         blend_const_with_alpha(dst, dstRowStride, dstPixelStride, srcp, srca, srcaRowStride, rows, cols);
 }
 
-static void to_rgb48(uint16_t *dst, const mp_image_t *src, int firstRow, int nRows)
+static void to_yuv444p16(uint16_t *dst, const mp_image_t *src, int firstRow, int nRows)
 {
     // TODO swscale
 }
 
-static void from_rgb48(mp_image_t *dst, const uint16_t *src, int firstRow, int nRows)
+static void from_yuv444p16(mp_image_t *dst, const uint16_t *src, int firstRow, int nRows)
 {
     // TODO swscale
 }
@@ -610,9 +610,9 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmap *sb)
     // TODO return if nothing left
     // TODO identify affected rows
     // TODO allocate temp image
-    // TODO call to_rgb48
+    // TODO call to_yuv444p16
     // TODO call blend_with_alpha 3 times
-    // TODO call from_rgb48
+    // TODO call from_yuv444p16
 }
 
 // TODO wire EOSD rendering to render_sub_bitmap

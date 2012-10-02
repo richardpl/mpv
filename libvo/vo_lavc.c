@@ -155,11 +155,12 @@ static int config(struct vo *vo, uint32_t width, uint32_t height,
 
     encode_lavc_set_csp(vo->encode_lavc_ctx, vc->stream, vc->colorspace.format);
     encode_lavc_set_csp_levels(vo->encode_lavc_ctx, vc->stream, vc->colorspace.levels_out);
-    vc->colorspace.format = encode_lavc_get_csp(vo->encode_lavc_ctx, vc->stream);
-    vc->colorspace.levels_out = encode_lavc_get_csp_levels(vo->encode_lavc_ctx, vc->stream);
 
     if (encode_lavc_open_codec(vo->encode_lavc_ctx, vc->stream) < 0)
         goto error;
+
+    vc->colorspace.format = encode_lavc_get_csp(vo->encode_lavc_ctx, vc->stream);
+    vc->colorspace.levels_out = encode_lavc_get_csp_levels(vo->encode_lavc_ctx, vc->stream);
 
     vc->buffer_size = 6 * width * height + 200;
     if (vc->buffer_size < FF_MIN_BUFFER_SIZE)
@@ -551,6 +552,70 @@ static int control(struct vo *vo, uint32_t request, void *data)
     }
     return VO_NOTIMPL;
 }
+
+static void blend_const_with_alpha(uint16_t *dst, ssize_t dstRowStride, ssize_t dstPixelStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+{
+    int i, j;
+    for (i = 0; i < rows; ++i) {
+        uint16_t *dstr = dst + dstRowStride * i;
+        uint8_t *srcar = srca + srcaRowStride * i;
+        for (j = 0; j < cols; ++j) {
+            uint16_t dstp = dstr[j * dstPixelStride];
+            uint32_t srcap = srcar[j * srcPixelStride]; // 32bit to force the math ops to operate on 32 bit
+            uint16_t outp = (srcp * 257 * srcap + dstp * (255 - srcap)) / 255;
+            dstr[j * dstPixelStride] = outp;
+        }
+    }
+}
+
+static void blend_src_with_alpha(uint16_t *dst, ssize_t dstRowStride, ssize_t dstPixelStride, const uint8_t *src, ssize_t srcRowStride, ssize_t srcPixelStride, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+{
+    int i, j;
+    for (i = 0; i < rows; ++i) {
+        uint16_t *dstr = dst + dstRowStride * i;
+        uint8_t *srcr = src + srcRowStride * i;
+        uint8_t *srcar = srca + srcaRowStride * i;
+        for (j = 0; j < cols; ++j) {
+            uint16_t dstp = dstr[j * dstPixelStride];
+            uint8_t srcp = srcr[j * srcPixelStride];
+            uint32_t srcap = srcar[j * srcPixelStride]; // 32bit to force the math ops to operate on 32 bit
+            uint16_t outp = (srcp * 257 * srcap + dstp * (255 - srcap)) / 255;
+            dstr[j * dstPixelStride] = outp;
+        }
+    }
+}
+
+static void blend_with_alpha(uint16_t *dst, ssize_t dstRowStride, ssize_t dstPixelStride, const uint8_t *src, ssize_t srcRowStride, ssize_t srcPixelStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+{
+    if (src)
+        blend_src_with_alpha(dst, dstRowStride, dstPixelStride, src, srcRowStride, srcPixelStride, srca, srcaRowStride, rows, cols);
+    else
+        blend_const_with_alpha(dst, dstRowStride, dstPixelStride, srcp, srca, srcaRowStride, rows, cols);
+}
+
+static void to_rgb48(uint16_t *dst, const mp_image_t *src, int firstRow, int nRows)
+{
+    // TODO swscale
+}
+
+static void from_rgb48(mp_image_t *dst, const uint16_t *src, int firstRow, int nRows)
+{
+    // TODO swscale
+}
+
+static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmap *sb)
+{
+    // TODO swscale the bitmap from w*h to dw*dh
+    // TODO cut off areas outside the image
+    // TODO return if nothing left
+    // TODO identify affected rows
+    // TODO allocate temp image
+    // TODO call to_rgb48
+    // TODO call blend_with_alpha 3 times
+    // TODO call from_rgb48
+}
+
+// TODO wire EOSD rendering to render_sub_bitmap
 
 static void draw_osd(struct vo *vo, struct osd_state *osd)
 {

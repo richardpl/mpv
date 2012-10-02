@@ -192,8 +192,19 @@ static int query_format(struct vo *vo, uint32_t format)
     if (!vo->encode_lavc_ctx)
         return 0;
 
-    return encode_lavc_supports_pixfmt(vo->encode_lavc_ctx, pix_fmt) ?
-           VFCAP_CSP_SUPPORTED | VFCAP_OSD : 0;
+    if (!encode_lavc_supports_pixfmt(vo->encode_lavc_ctx, pix_fmt))
+        return 0;
+
+    return
+        VFCAP_CSP_SUPPORTED |
+            // we can do it
+        VFCAP_CSP_SUPPORTED_BY_HW |
+            // we don't convert colorspaces here (TODO: if we add EOSD rendering, only set this flag if EOSD can be rendered without extra conversions)
+        VFCAP_OSD |
+            // we have OSD
+        VOCAP_NOSLICES;
+            // we don't use slices
+        // TODO: we want to support EOSD too, this would give us VFCAP_EOSD and maybe VFCAP_EOSD_RGBA too
 }
 
 static void write_packet(struct vo *vo, int size, AVPacket *packet)

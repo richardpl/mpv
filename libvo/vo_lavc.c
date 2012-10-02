@@ -55,8 +55,6 @@ struct priv {
     AVRational worst_time_base;
     int worst_time_base_is_stream;
 
-    struct osd_state *osd;
-
     struct mp_csp_details colorspace;
 };
 
@@ -336,14 +334,6 @@ static void add_osd_to_lastimg_draw_func(void *ctx, int x0,int y0, int w,int h,u
     }
 }
 
-static void add_osd_to_lastimg(struct vo *vo)
-{
-    struct priv *vc = vo->priv;
-    if(vc->osd) {
-        osd_draw_text(vc->osd, vc->lastimg->w, vc->lastimg->h, add_osd_to_lastimg_draw_func, vc);
-    }
-}
-
 static void draw_image(struct vo *vo, mp_image_t *mpi, double pts)
 {
     struct priv *vc = vo->priv;
@@ -564,10 +554,9 @@ static int control(struct vo *vo, uint32_t request, void *data)
 static void draw_osd(struct vo *vo, struct osd_state *osd)
 {
     struct priv *vc = vo->priv;
-    vc->osd = osd;
     if(vc->lastimg && vc->lastimg_wants_osd) {
-        osd_update(vc->osd, vc->lastimg->w, vc->lastimg->h);
-        add_osd_to_lastimg(vo);
+        osd_update(osd, vc->lastimg->w, vc->lastimg->h);
+        osd_draw_text(osd, vc->lastimg->w, vc->lastimg->h, add_osd_to_lastimg_draw_func, vc);
     }
 }
 

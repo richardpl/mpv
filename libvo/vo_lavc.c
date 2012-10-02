@@ -49,6 +49,7 @@ struct priv {
     int64_t lastframeipts;
     double expected_next_pts;
     mp_image_t *lastimg;
+    int lastimg_wants_osd;
     int lastdisplaycount;
 
     AVRational worst_time_base;
@@ -503,7 +504,7 @@ static void draw_image(struct vo *vo, mp_image_t *mpi, double pts)
                        "vo-lavc: Frame at pts %d got displayed %d times\n",
                        (int) vc->lastframeipts, vc->lastdisplaycount);
             copy_mpi(vc->lastimg, mpi);
-            add_osd_to_lastimg(vo);
+            vc->lastimg_wants_osd = true;
 
             // palette hack
             if (vc->lastimg->imgfmt == IMGFMT_RGB8 ||
@@ -516,9 +517,11 @@ static void draw_image(struct vo *vo, mp_image_t *mpi, double pts)
                 vc->lastipts = -1;
             }
             vc->lastdisplaycount = 0;
-        } else
+        } else {
             mp_msg(MSGT_ENCODE, MSGL_INFO, "vo-lavc: Frame at pts %d got dropped "
                    "entirely because pts went backwards\n", (int) frameipts);
+            vc->lastimg_wants_osd = false;
+        }
     }
 }
 
@@ -551,8 +554,10 @@ static void draw_osd(struct vo *vo, struct osd_state *osd)
 {
     struct priv *vc = vo->priv;
     vc->osd = osd;
-    if(vc->lastimg)
+    if(vc->lastimg && vc->lastimg_wants_osd) {
         osd_update(vc->osd, vc->lastimg->w, vc->lastimg->h);
+        add_osd_to_lastimg(vo);
+    }
 }
 
 static void flip_page_timed(struct vo *vo, unsigned int pts_us, int duration)

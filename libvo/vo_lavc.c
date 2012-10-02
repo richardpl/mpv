@@ -553,66 +553,126 @@ static int control(struct vo *vo, uint32_t request, void *data)
     return VO_NOTIMPL;
 }
 
-static void blend_const_with_alpha(uint16_t *dst, ssize_t dstRowStride, ssize_t dstPixelStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+static void blend_const_with_alpha(uint16_t *dst, ssize_t dstRowStride, uint16_t srcp, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
         uint16_t *dstr = dst + dstRowStride * i;
-        uint8_t *srcar = srca + srcaRowStride * i;
+        const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
-            uint16_t dstp = dstr[j * dstPixelStride];
-            uint32_t srcap = srcar[j * srcPixelStride]; // 32bit to force the math ops to operate on 32 bit
-            uint16_t outp = (srcp * 257 * srcap + dstp * (255 - srcap)) / 255;
-            dstr[j * dstPixelStride] = outp;
+            uint16_t dstp = dstr[j];
+            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            uint16_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255;
+            dstr[j] = outp;
         }
     }
 }
 
-static void blend_src_with_alpha(uint16_t *dst, ssize_t dstRowStride, ssize_t dstPixelStride, const uint8_t *src, ssize_t srcRowStride, ssize_t srcPixelStride, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+static void blend_src_with_alpha(uint16_t *dst, ssize_t dstRowStride, const uint16_t *src, ssize_t srcRowStride, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
         uint16_t *dstr = dst + dstRowStride * i;
-        uint8_t *srcr = src + srcRowStride * i;
-        uint8_t *srcar = srca + srcaRowStride * i;
+        const uint16_t *srcr = src + srcRowStride * i;
+        const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
-            uint16_t dstp = dstr[j * dstPixelStride];
-            uint8_t srcp = srcr[j * srcPixelStride];
-            uint32_t srcap = srcar[j * srcPixelStride]; // 32bit to force the math ops to operate on 32 bit
-            uint16_t outp = (srcp * 257 * srcap + dstp * (255 - srcap)) / 255;
-            dstr[j * dstPixelStride] = outp;
+            uint16_t dstp = dstr[j];
+            uint16_t srcp = srcr[j];
+            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            uint16_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255;
+            dstr[j] = outp;
         }
     }
 }
 
-static void blend_with_alpha(uint16_t *dst, ssize_t dstRowStride, ssize_t dstPixelStride, const uint8_t *src, ssize_t srcRowStride, ssize_t srcPixelStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+static void blend_with_alpha(uint16_t *dst, ssize_t dstRowStride, const uint16_t *src, ssize_t srcRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
 {
     if (src)
-        blend_src_with_alpha(dst, dstRowStride, dstPixelStride, src, srcRowStride, srcPixelStride, srca, srcaRowStride, rows, cols);
+        blend_src_with_alpha(dst, dstRowStride, src, srcRowStride, srca, srcaRowStride, rows, cols);
     else
-        blend_const_with_alpha(dst, dstRowStride, dstPixelStride, srcp, srca, srcaRowStride, rows, cols);
+        blend_const_with_alpha(dst, dstRowStride, srcp, srca, srcaRowStride, rows, cols);
 }
 
-static void to_yuv444p16(uint16_t *dst, const mp_image_t *src, int firstRow, int nRows)
+static void region_to_region(mp_image_t *dst, int destRow, const mp_image_t *src, int srcRow, int nRows)
 {
     // TODO swscale
 }
 
-static void from_yuv444p16(mp_image_t *dst, const uint16_t *src, int firstRow, int nRows)
+static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
 {
-    // TODO swscale
-}
+    int i;
+    int firstRow = dst->h;
+    int endRow = 0;
+    for (i = 0; i < sbs->part_count; ++i) {
+        struct sub_bitmap *sb = &sbs->parts[i];
+        if (sb->y < firstRow)
+            firstRow = sb->y;
+        if (sb->y + sb->dh > endRow)
+            endRow = sb->y + sb->dh;
+    }
+    firstRow &= ~((1 << dst->chroma_y_shift) - 1);
+    endRow |= (1 << dst->chroma_y_shift) - 1;
 
-static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmap *sb)
-{
-    // TODO swscale the bitmap from w*h to dw*dh
-    // TODO cut off areas outside the image
-    // TODO return if nothing left
-    // TODO identify affected rows
-    // TODO allocate temp image
-    // TODO call to_yuv444p16
-    // TODO call blend_with_alpha 3 times
-    // TODO call from_yuv444p16
+    if (firstRow < 0)
+        firstRow = 0;
+    if (endRow > dst->h)
+        endRow = dst->h;
+    if (firstRow >= endRow)
+        return; // nothing to do
+
+    // allocate temp image
+    mp_image_t *temp = alloc_mpi(dst->w, firstRow, IMGFMT_444P16);
+
+    // convert to temp image
+    region_to_region(temp, 0, dst, firstRow, endRow - firstRow);
+
+    for (i = 0; i < sbs->part_count; ++i) {
+        struct sub_bitmap *sb = &sbs->parts[i];
+
+        if (sbs->type == SUBBITMAP_RGBA) {
+            // TODO swscale the bitmap from w*h to dw*dh, changing BGRA8 into YUV444P16 and make a scaled copy of A8
+        } else if (sbs->type == SUBBITMAP_LIBASS) {
+            // TODO swscale alpha only
+        } else {
+            mp_msg(MSGT_VO, MSGL_ERR, "render_sub_bitmap: invalid sub bitmap type\n");
+            continue;
+        }
+
+        // cut off areas outside the image
+        int dst_x = sb->x;
+        int dst_y = sb->y;
+        int dst_w = sb->dw;
+        int dst_h = sb->dh;
+        if (dst_x < 0) {
+            dst_w += dst_x;
+            dst_x = 0;
+        }
+        if (dst_y < 0) {
+            dst_h += dst_y;
+            dst_y = 0;
+        }
+        if (dst_x + dst_w > dst->w) {
+            dst_w = dst->w - dst_x;
+        }
+        if (dst_y + dst_h > dst->h) {
+            dst_h = dst->h - dst_y;
+        }
+
+        // return if nothing left
+        if (dst_w <= 0 || dst_h <= 0)
+            continue;
+
+        // call blend_with_alpha 3 times
+        int p;
+        for(p = 0; p < 3; ++p)
+            blend_with_alpha(((uint16_t *) (temp->planes[p] + (dst_y - firstRow) * temp->stride[p])) + dst_x, temp->stride[p], src, srcRowStride, srcp[p], srca, srcaRowStride, dst_h, dst_w);
+    }
+
+    // convert back
+    region_to_region(dst, firstRow, temp, 0, endRow - firstRow);
+
+    // clean up
+    free_mp_image(temp);
 }
 
 // TODO wire EOSD rendering to render_sub_bitmap

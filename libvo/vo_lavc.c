@@ -330,6 +330,7 @@ static void add_osd_to_lastimg_draw_func(void *ctx, int x0,int y0, int w,int h,u
             vo_draw_alpha_yuy2(w,h,src,srca,stride,dst+1,vc->lastimg->stride[0]);
             break;
         default:
+            // FIXME solve this by libswscale conversion
             mp_msg(MSGT_ENCODE, MSGL_WARN, "vo-lavc: tried to draw OSD on an usnupported pixel format\n");
     }
 }

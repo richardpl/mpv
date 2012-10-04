@@ -599,8 +599,12 @@ static void blend_with_alpha(uint16_t *dst, ssize_t dstRowStride, const uint16_t
         blend_const_with_alpha(dst, dstRowStride, srcp, srca, srcaRowStride, rows, cols);
 }
 
-static void region_to_region(mp_image_t *dst, int dstRow, int dstRows, const mp_image_t *src, int srcRow, int srcRows, struct mp_csp_details *csp)
+static void region_to_region(mp_image_t *dst, int dstRow, int dstRows, int dstRowStep, const mp_image_t *src, int srcRow, int srcRows, int srcRowStep, struct mp_csp_details *csp)
 {
+    int mask = ((1 << dst->chroma_y_shift) - 1) | ((1 << src->chroma_y_shift) - 1);
+    if ((dstRow | dstRows | srcRow | srcRows) & mask) {
+        mp_msg(MSGT_VO, MSGL_ERR, "region_to_region: chroma y shift: cannot copy src row %d length %d to dst row %d length %d without problems, the output image may be corrupted\n", srcRow, srcRows, dstRow, dstRows);
+    }
     struct SwsContext *sws = sws_getContextFromCmdLine_hq(src->w, srcRows, src->imgfmt, dst->w, dstRows, dst->imgfmt);
     struct mp_csp_details colorspace = MP_CSP_DETAILS_DEFAULTS;
     if (csp)
@@ -608,17 +612,29 @@ static void region_to_region(mp_image_t *dst, int dstRow, int dstRows, const mp_
     mp_sws_set_colorspace(sws, &colorspace);
     const uint8_t *const src_planes[4] = {
         src->planes[0] + srcRow * src->stride[0],
-        src->planes[1] + srcRow * src->stride[1],
-        src->planes[2] + srcRow * src->stride[2],
-        src->planes[3] + srcRow * src->stride[3]
+        src->planes[1] + (srcRow >> src->chroma_y_shift) * src->stride[1],
+        src->planes[2] + (srcRow >> src->chroma_y_shift) * src->stride[2],
+        src->planes[3] + (srcRow >> src->chroma_y_shift) * src->stride[3]
     };
     uint8_t *const dst_planes[4] = {
         dst->planes[0] + dstRow * dst->stride[0],
-        dst->planes[1] + dstRow * dst->stride[1],
-        dst->planes[2] + dstRow * dst->stride[2],
-        dst->planes[3] + dstRow * dst->stride[3]
+        dst->planes[1] + (dstRow >> dst->chroma_y_shift) * dst->stride[1],
+        dst->planes[2] + (dstRow >> dst->chroma_y_shift) * dst->stride[2],
+        dst->planes[3] + (dstRow >> dst->chroma_y_shift) * dst->stride[3]
     };
-    sws_scale(sws, src_planes, src->stride, 0, srcRows, dst_planes, dst->stride);
+    const int src_stride[4] = {
+        src->stride[0] * srcRowStep,
+        src->stride[1] * srcRowStep,
+        src->stride[2] * srcRowStep,
+        src->stride[3] * srcRowStep
+    };
+    const int dst_stride[4] = {
+        dst->stride[0] * dstRowStep,
+        dst->stride[1] * dstRowStep,
+        dst->stride[2] * dstRowStep,
+        dst->stride[3] * dstRowStep
+    };
+    sws_scale(sws, src_planes, src_stride, 0, srcRows, dst_planes, dst_stride);
     sws_freeContext(sws);
 }
 
@@ -650,7 +666,7 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
     mp_image_t *temp = alloc_mpi(dst->w, firstRow, IMGFMT_444P16);
 
     // convert to temp image
-    region_to_region(temp, 0, endRow - firstRow, dst, firstRow, endRow - firstRow, NULL);
+    region_to_region(temp, 0, endRow - firstRow, 1, dst, firstRow, endRow - firstRow, 1, NULL);
 
     for (i = 0; i < sbs->part_count; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
@@ -663,7 +679,7 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
             mp_image_setfmt(sbisrc, IMGFMT_BGRA);
             sbisrc->planes[0] = sb->bitmap;
             sbi = alloc_mpi(sb->dw, sb->dh, IMGFMT_444P16);
-            region_to_region(sbi, 0, sb->dh, sbisrc, 0, sb->h, NULL);
+            region_to_region(sbi, 0, sb->dh, 1, sbisrc, 0, sb->h, 1, NULL);
             free_mp_image(sbisrc);
 
             mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
@@ -671,7 +687,7 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
                 for (x = 0; x < sb->w; ++x)
                     sbasrc->planes[0][x + y * sbasrc->stride[0]] = ((unsigned char *) sb->bitmap)[(x + y * sb->w) * 4 + 3];
             sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
-            region_to_region(sba, 0, sb->dh, sbasrc, 0, sb->h, NULL);
+            region_to_region(sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, NULL);
             free_mp_image(sbasrc);
         } else if (sbs->type == SUBBITMAP_LIBASS) {
             // swscale alpha only
@@ -679,7 +695,7 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
             mp_image_setfmt(sbasrc, IMGFMT_Y8);
             sbasrc->planes[0] = sb->bitmap;
             sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
-            region_to_region(sba, 0, sb->dh, sbasrc, 0, sb->h, NULL);
+            region_to_region(sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, NULL);
             free_mp_image(sbasrc);
         }
 
@@ -727,7 +743,7 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
     }
 
     // convert back
-    region_to_region(dst, firstRow, endRow - firstRow, temp, 0, endRow - firstRow, NULL);
+    region_to_region(dst, firstRow, endRow - firstRow, 1, temp, 0, endRow - firstRow, 1, NULL);
 
     // clean up
     free_mp_image(temp);

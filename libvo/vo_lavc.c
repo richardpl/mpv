@@ -803,6 +803,11 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct m
                     color_yuv[3],
                     dst_h, dst_w, bytes
                     );
+
+        if (sbi)
+            free_mp_image (sbi);
+        if (sba)
+            free_mp_image (sba);
     }
 
     // convert back

@@ -791,7 +791,7 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct m
 
         // call blend_with_alpha 3 times
         int p;
-        for(p = 0; p < 1; ++p) // FIXME 3
+        for(p = 0; p < 3; ++p)
             blend_with_alpha(
                     (temp->planes[p] + (dst_y - firstRow) * temp->stride[p]) + dst_x * bytes,
                     temp->stride[p],

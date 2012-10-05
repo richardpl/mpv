@@ -204,7 +204,7 @@ static int query_format(struct vo *vo, uint32_t format)
             // we can do it
         VFCAP_CSP_SUPPORTED_BY_HW |
             // we don't convert colorspaces here (TODO: if we add EOSD rendering, only set this flag if EOSD can be rendered without extra conversions)
-        VFCAP_OSD | VFCAP_EOSD | VFCAP_EOSD_RGBA |
+        VFCAP_OSD | VFCAP_EOSD |
             // we have OSD
         VOCAP_NOSLICES;
             // we don't use slices
@@ -614,6 +614,8 @@ static void region_to_region(mp_image_t *dst, int dstRow, int dstRows, int dstRo
 #define MP_MAP_RGB2YUV_COLOR(minv,r,g,b,c) ((minv)[c][0] * (r) + (minv)[c][1] * (g) + (minv)[c][2] * (b) + (minv)[c][3])
 static void mp_invert_yuv2rgb(float out[3][4], float in[3][4])
 {
+    // this is from the DarkPlaces engine, reduces to 3x3. Original code
+    // released under GPL2 or any later version.
     float det;
 
     // this seems to help gcc's common subexpression elimination, and also makes the code look nicer
@@ -810,8 +812,6 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct m
     free_mp_image(temp);
 }
 
-// TODO wire EOSD rendering to render_sub_bitmap
-
 static void flip_page_timed(struct vo *vo, unsigned int pts_us, int duration)
 {
 }
@@ -842,8 +842,6 @@ static int control(struct vo *vo, uint32_t request, void *data)
         *(struct mp_csp_details *)data = vc->colorspace;
         return 1;
     case VOCTRL_DRAW_EOSD:
-        if (!data)
-            return VO_FALSE;
         if (vc->lastimg && vc->lastimg_wants_osd) {
             struct sub_bitmaps *imgs = data;
             render_sub_bitmap(vc->lastimg, imgs, &vc->colorspace);

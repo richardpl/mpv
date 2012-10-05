@@ -204,11 +204,10 @@ static int query_format(struct vo *vo, uint32_t format)
             // we can do it
         VFCAP_CSP_SUPPORTED_BY_HW |
             // we don't convert colorspaces here (TODO: if we add EOSD rendering, only set this flag if EOSD can be rendered without extra conversions)
-        VFCAP_OSD |
+        VFCAP_OSD | VFCAP_EOSD | VFCAP_EOSD_RGBA |
             // we have OSD
         VOCAP_NOSLICES;
             // we don't use slices
-        // TODO: we want to support EOSD too, this would give us VFCAP_EOSD and maybe VFCAP_EOSD_RGBA too
 }
 
 static void write_packet(struct vo *vo, int size, AVPacket *packet)
@@ -288,56 +287,6 @@ static int encode_video(struct vo *vo, AVFrame *frame, AVPacket *packet)
 
         encode_lavc_write_stats(vo->encode_lavc_ctx, vc->stream);
         return size;
-    }
-}
-
-static void add_osd_to_lastimg_draw_func(void *ctx, int x0,int y0, int w,int h,unsigned char* src, unsigned char *srca, int stride){
-    struct priv *vc = ctx;
-    unsigned char* dst;
-    if(w<=0 || h<=0) return; // nothing to do...
-    //    printf("OSD redraw: %d;%d %dx%d  \n",x0,y0,w,h);
-    dst=vc->lastimg->planes[0]+
-        vc->lastimg->stride[0]*y0+
-        (vc->lastimg->bpp>>3)*x0;
-    switch(vc->lastimg->imgfmt){
-        case IMGFMT_BGR12:
-        case IMGFMT_RGB12:
-            vo_draw_alpha_rgb12(w, h, src, srca, stride, dst, vc->lastimg->stride[0]);
-            break;
-        case IMGFMT_BGR15:
-        case IMGFMT_RGB15:
-            vo_draw_alpha_rgb15(w,h,src,srca,stride,dst,vc->lastimg->stride[0]);
-            break;
-        case IMGFMT_BGR16:
-        case IMGFMT_RGB16:
-            vo_draw_alpha_rgb16(w,h,src,srca,stride,dst,vc->lastimg->stride[0]);
-            break;
-        case IMGFMT_BGR24:
-        case IMGFMT_RGB24:
-            vo_draw_alpha_rgb24(w,h,src,srca,stride,dst,vc->lastimg->stride[0]);
-            break;
-        case IMGFMT_BGR32:
-        case IMGFMT_RGB32:
-            vo_draw_alpha_rgb32(w,h,src,srca,stride,dst,vc->lastimg->stride[0]);
-            break;
-        case IMGFMT_YV12:
-        case IMGFMT_I420:
-        case IMGFMT_IYUV:
-        case IMGFMT_YVU9:
-        case IMGFMT_IF09:
-        case IMGFMT_Y800:
-        case IMGFMT_Y8:
-            vo_draw_alpha_yv12(w,h,src,srca,stride,dst,vc->lastimg->stride[0]);
-            break;
-        case IMGFMT_YUY2:
-            vo_draw_alpha_yuy2(w,h,src,srca,stride,dst,vc->lastimg->stride[0]);
-            break;
-        case IMGFMT_UYVY:
-            vo_draw_alpha_yuy2(w,h,src,srca,stride,dst+1,vc->lastimg->stride[0]);
-            break;
-        default:
-            // FIXME solve this by libswscale conversion
-            mp_msg(MSGT_ENCODE, MSGL_WARN, "vo-lavc: tried to draw OSD on an usnupported pixel format\n");
     }
 }
 
@@ -533,77 +482,100 @@ static void draw_image(struct vo *vo, mp_image_t *mpi, double pts)
     }
 }
 
-static int control(struct vo *vo, uint32_t request, void *data)
-{
-    struct priv *vc = vo->priv;
-    switch (request) {
-    case VOCTRL_QUERY_FORMAT:
-        return query_format(vo, *((uint32_t *)data));
-    case VOCTRL_DRAW_IMAGE:
-        draw_image(vo, (mp_image_t *)data, vo->next_pts);
-        return 0;
-    case VOCTRL_SET_YUV_COLORSPACE:
-        vc->colorspace = *(struct mp_csp_details *)data;
-        if (vc->stream) {
-            encode_lavc_set_csp(vo->encode_lavc_ctx, vc->stream, vc->colorspace.format);
-            encode_lavc_set_csp_levels(vo->encode_lavc_ctx, vc->stream, vc->colorspace.levels_out);
-            vc->colorspace.format = encode_lavc_get_csp(vo->encode_lavc_ctx, vc->stream);
-            vc->colorspace.levels_out = encode_lavc_get_csp_levels(vo->encode_lavc_ctx, vc->stream);
-        }
-        return 1;
-    case VOCTRL_GET_YUV_COLORSPACE:
-        *(struct mp_csp_details *)data = vc->colorspace;
-        return 1;
-    }
-    return VO_NOTIMPL;
-}
-
-static void blend_const_with_alpha(uint16_t *dst, ssize_t dstRowStride, uint16_t srcp, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+static void blend_const16_with_alpha(uint8_t *dst, ssize_t dstRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
-        uint16_t *dstr = dst + dstRowStride * i;
+        uint16_t *dstr = (uint16_t *) (dst + dstRowStride * i);
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
             uint16_t dstp = dstr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
-            uint16_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255;
+            srcap = (srcap * srcamul / 255);
+            uint16_t outp = (srcp * srcap * 257 + dstp * (255 - srcap)) / 255;
             dstr[j] = outp;
         }
     }
 }
 
-static void blend_src_with_alpha(uint16_t *dst, ssize_t dstRowStride, const uint16_t *src, ssize_t srcRowStride, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+static void blend_src16_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint8_t *src, ssize_t srcRowStride, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
-        uint16_t *dstr = dst + dstRowStride * i;
-        const uint16_t *srcr = src + srcRowStride * i;
+        uint16_t *dstr = (uint16_t *) (dst + dstRowStride * i);
+        const uint16_t *srcr = (const uint16_t *) (src + srcRowStride * i);
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
             uint16_t dstp = dstr[j];
             uint16_t srcp = srcr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap = (srcap * srcamul / 255);
             // uint16_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255; // separate alpha GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
-            uint16_t outp = srcp + (dstp * (255 - srcap)) / 255; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+            srcp = (srcp * srcamul / 255); // premultiply
+            uint16_t outp = srcp * 257 + (dstp * (255 - srcap)) / 255; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
     }
 }
 
-static void blend_with_alpha(uint16_t *dst, ssize_t dstRowStride, const uint16_t *src, ssize_t srcRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, int rows, int cols)
+static void blend_const8_with_alpha(uint8_t *dst, ssize_t dstRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols)
 {
-    if (src)
-        blend_src_with_alpha(dst, dstRowStride, src, srcRowStride, srca, srcaRowStride, rows, cols);
-    else
-        blend_const_with_alpha(dst, dstRowStride, srcp, srca, srcaRowStride, rows, cols);
+    int i, j;
+    for (i = 0; i < rows; ++i) {
+        uint8_t *dstr = dst + dstRowStride * i;
+        const uint8_t *srcar = srca + srcaRowStride * i;
+        for (j = 0; j < cols; ++j) {
+            uint8_t dstp = dstr[j];
+            uint16_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap = (srcap * srcamul / 255);
+            uint8_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255;
+            dstr[j] = outp;
+        }
+    }
+}
+
+static void blend_src8_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint8_t *src, ssize_t srcRowStride, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols)
+{
+    int i, j;
+    for (i = 0; i < rows; ++i) {
+        uint8_t *dstr = dst + dstRowStride * i;
+        const uint8_t *srcr = src + srcRowStride * i;
+        const uint8_t *srcar = srca + srcaRowStride * i;
+        for (j = 0; j < cols; ++j) {
+            uint8_t dstp = dstr[j];
+            uint8_t srcp = srcr[j];
+            uint16_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap = (srcap * srcamul / 255);
+            // uint8_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255; // separate alpha GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+            srcp = (srcp * srcamul / 255); // premultiply
+            uint8_t outp = srcp + (dstp * (255 - srcap)) / 255; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+            dstr[j] = outp;
+        }
+    }
+}
+
+static void blend_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint8_t *src, ssize_t srcRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols, int bytes)
+{
+    if (bytes == 2) {
+        if (src)
+            blend_src16_with_alpha(dst, dstRowStride, src, srcRowStride, srca, srcaRowStride, srcamul, rows, cols);
+        else
+            blend_const16_with_alpha(dst, dstRowStride, srcp, srca, srcaRowStride, srcamul, rows, cols);
+    } else if (bytes == 1) {
+        if (src)
+            blend_src8_with_alpha(dst, dstRowStride, src, srcRowStride, srca, srcaRowStride, srcamul, rows, cols);
+        else
+            blend_const8_with_alpha(dst, dstRowStride, srcp, srca, srcaRowStride, srcamul, rows, cols);
+    }
 }
 
 static void region_to_region(mp_image_t *dst, int dstRow, int dstRows, int dstRowStep, const mp_image_t *src, int srcRow, int srcRows, int srcRowStep, struct mp_csp_details *csp)
 {
-    int mask = ((1 << dst->chroma_y_shift) - 1) | ((1 << src->chroma_y_shift) - 1);
+    int src_chroma_y_shift = src->chroma_y_shift == 31 ? 0 : src->chroma_y_shift;
+    int dst_chroma_y_shift = dst->chroma_y_shift == 31 ? 0 : dst->chroma_y_shift;
+    int mask = ((1 << dst_chroma_y_shift) - 1) | ((1 << src_chroma_y_shift) - 1);
     if ((dstRow | dstRows | srcRow | srcRows) & mask) {
-        mp_msg(MSGT_VO, MSGL_ERR, "region_to_region: chroma y shift: cannot copy src row %d length %d to dst row %d length %d without problems, the output image may be corrupted\n", srcRow, srcRows, dstRow, dstRows);
+        mp_msg(MSGT_VO, MSGL_ERR, "region_to_region: chroma y shift: cannot copy src row %d length %d to dst row %d length %d without problems, the output image may be corrupted (%d, %d, %d)\n", srcRow, srcRows, dstRow, dstRows, mask, dst->chroma_y_shift, src->chroma_y_shift);
     }
     struct SwsContext *sws = sws_getContextFromCmdLine_hq(src->w, srcRows, src->imgfmt, dst->w, dstRows, dst->imgfmt);
     struct mp_csp_details colorspace = MP_CSP_DETAILS_DEFAULTS;
@@ -612,15 +584,15 @@ static void region_to_region(mp_image_t *dst, int dstRow, int dstRows, int dstRo
     mp_sws_set_colorspace(sws, &colorspace);
     const uint8_t *const src_planes[4] = {
         src->planes[0] + srcRow * src->stride[0],
-        src->planes[1] + (srcRow >> src->chroma_y_shift) * src->stride[1],
-        src->planes[2] + (srcRow >> src->chroma_y_shift) * src->stride[2],
-        src->planes[3] + (srcRow >> src->chroma_y_shift) * src->stride[3]
+        src->planes[1] + (srcRow >> src_chroma_y_shift) * src->stride[1],
+        src->planes[2] + (srcRow >> src_chroma_y_shift) * src->stride[2],
+        src->planes[3] + (srcRow >> src_chroma_y_shift) * src->stride[3]
     };
     uint8_t *const dst_planes[4] = {
         dst->planes[0] + dstRow * dst->stride[0],
-        dst->planes[1] + (dstRow >> dst->chroma_y_shift) * dst->stride[1],
-        dst->planes[2] + (dstRow >> dst->chroma_y_shift) * dst->stride[2],
-        dst->planes[3] + (dstRow >> dst->chroma_y_shift) * dst->stride[3]
+        dst->planes[1] + (dstRow >> dst_chroma_y_shift) * dst->stride[1],
+        dst->planes[2] + (dstRow >> dst_chroma_y_shift) * dst->stride[2],
+        dst->planes[3] + (dstRow >> dst_chroma_y_shift) * dst->stride[3]
     };
     const int src_stride[4] = {
         src->stride[0] * srcRowStep,
@@ -638,12 +610,76 @@ static void region_to_region(mp_image_t *dst, int dstRow, int dstRows, int dstRo
     sws_freeContext(sws);
 }
 
-static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
+#define MP_MAP_YUV2RGB_COLOR(m,y,u,v,c) ((m)[c][0] * (y) + (m)[c][1] * (u) + (m)[c][2] * (v) + (m)[c][3])
+#define MP_MAP_RGB2YUV_COLOR(minv,r,g,b,c) ((minv)[c][0] * (r) + (minv)[c][1] * (g) + (minv)[c][2] * (b) + (minv)[c][3])
+static void mp_invert_yuv2rgb(float out[3][4], float in[3][4])
+{
+    float det;
+
+    // this seems to help gcc's common subexpression elimination, and also makes the code look nicer
+    float   m00 = in[0][0], m01 = in[0][1], m02 = in[0][2], m03 = in[0][3],
+            m10 = in[1][0], m11 = in[1][1], m12 = in[1][2], m13 = in[1][3],
+            m20 = in[2][0], m21 = in[2][1], m22 = in[2][2], m23 = in[2][3];
+
+    // calculate the adjoint
+    out[0][0] =  (m11*m22 - m21*m12);
+    out[0][1] = -(m01*m22 - m21*m02);
+    out[0][2] =  (m01*m12 - m11*m02);
+    out[1][0] = -(m10*m22 - m20*m12);
+    out[1][1] =  (m00*m22 - m20*m02);
+    out[1][2] = -(m00*m12 - m10*m02);
+    out[2][0] =  (m10*m21 - m20*m11);
+    out[2][1] = -(m00*m21 - m20*m01);
+    out[2][2] =  (m00*m11 - m10*m01);
+
+    // calculate the determinant (as inverse == 1/det * adjoint, adjoint * m == identity * det, so this calculates the det)
+    det = m00*out[0][0] + m10*out[0][1] + m20*out[0][2];
+    if (det == 0.0f) {
+        mp_msg(MSGT_VO, MSGL_ERR, "cannot invert yuv2rgb matrix\n");
+        return;
+    }
+
+    // multiplications are faster than divisions, usually
+    det = 1.0f / det;
+
+    // manually unrolled loop to multiply all matrix elements by 1/det
+    out[0][0] *= det; out[0][1] *= det; out[0][2] *= det;
+    out[1][0] *= det; out[1][1] *= det; out[1][2] *= det;
+    out[2][0] *= det; out[2][1] *= det; out[2][2] *= det;
+
+    // fix the constant coefficient
+    // rgb = M * yuv + C
+    // M^-1 * rgb = yuv + M^-1 * C
+    // yuv = M^-1 * rgb - M^-1 * C
+    //                  ^^^^^^^^^^
+    out[0][3] = -(out[0][0] * m03 + out[0][1] * m13 + out[0][2] * m23);
+    out[1][3] = -(out[1][0] * m03 + out[1][1] * m13 + out[1][2] * m23);
+    out[2][3] = -(out[2][0] * m03 + out[2][1] * m13 + out[2][2] * m23);
+}
+
+static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct mp_csp_details *csp)
 {
     int i, x, y;
     int firstRow = dst->h;
     int endRow = 0;
-    for (i = 0; i < sbs->part_count; ++i) {
+    int color_yuv[4];
+    float yuv2rgb[3][4];
+    float rgb2yuv[3][4];
+    struct mp_csp_params cspar = { .colorspace = *csp, .brightness = 0, .contrast = 1, .hue = 0, .saturation = 1, .rgamma = 1, .ggamma = 1, .bgamma = 1, .texture_bits = 8, .input_bits = 8 };
+#if 1
+    int format = IMGFMT_444P16;
+    int bytes = 2;
+#else
+    int format = IMGFMT_444P;
+    int bytes = 1;
+#endif
+
+    // prepare YUV/RGB conversion values
+    mp_get_yuv2rgb_coeffs(&cspar, yuv2rgb);
+    mp_invert_yuv2rgb(rgb2yuv, yuv2rgb);
+
+    // calculate bounding range
+    for (i = 0; i < sbs->num_parts; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
         if (sb->y < firstRow)
             firstRow = sb->y;
@@ -663,46 +699,15 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
         return; // nothing to do
 
     // allocate temp image
-    mp_image_t *temp = alloc_mpi(dst->w, firstRow, IMGFMT_444P16);
+    mp_image_t *temp = alloc_mpi(dst->w, endRow - firstRow, format);
 
     // convert to temp image
-    region_to_region(temp, 0, endRow - firstRow, 1, dst, firstRow, endRow - firstRow, 1, NULL);
+    region_to_region(temp, 0, endRow - firstRow, 1, dst, firstRow, endRow - firstRow, 1, csp);
 
-    for (i = 0; i < sbs->part_count; ++i) {
+    for (i = 0; i < sbs->num_parts; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
         mp_image_t *sbi = NULL;
         mp_image_t *sba = NULL;
-
-        if (sbs->type == SUBBITMAP_RGBA) {
-            // swscale the bitmap from w*h to dw*dh, changing BGRA8 into YUV444P16 and make a scaled copy of A8
-            mp_image_t *sbisrc = new_mp_image(sb->w, sb->h);
-            mp_image_setfmt(sbisrc, IMGFMT_BGRA);
-            sbisrc->planes[0] = sb->bitmap;
-            sbi = alloc_mpi(sb->dw, sb->dh, IMGFMT_444P16);
-            region_to_region(sbi, 0, sb->dh, 1, sbisrc, 0, sb->h, 1, NULL);
-            free_mp_image(sbisrc);
-
-            mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
-            for (y = 0; y < sb->h; ++y)
-                for (x = 0; x < sb->w; ++x)
-                    sbasrc->planes[0][x + y * sbasrc->stride[0]] = ((unsigned char *) sb->bitmap)[(x + y * sb->w) * 4 + 3];
-            sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
-            region_to_region(sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, NULL);
-            free_mp_image(sbasrc);
-        } else if (sbs->type == SUBBITMAP_LIBASS) {
-            // swscale alpha only
-            mp_image_t *sbasrc = new_mp_image(sb->w, sb->h);
-            mp_image_setfmt(sbasrc, IMGFMT_Y8);
-            sbasrc->planes[0] = sb->bitmap;
-            sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
-            region_to_region(sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, NULL);
-            free_mp_image(sbasrc);
-        }
-
-        if (!sbi) {
-            mp_msg(MSGT_VO, MSGL_ERR, "render_sub_bitmap: invalid sub bitmap type\n");
-            continue;
-        }
 
         // cut off areas outside the image
         int dst_x = sb->x;
@@ -728,22 +733,78 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
         if (dst_w <= 0 || dst_h <= 0)
             continue;
 
+        if (sbs->format == SUBBITMAP_RGBA && sb->w >= 8) { // >= 8 because of libswscale madness
+            // swscale the bitmap from w*h to dw*dh, changing BGRA8 into YUV444P16 and make a scaled copy of A8
+            mp_image_t *sbisrc = new_mp_image(sb->w, sb->h);
+            mp_image_setfmt(sbisrc, IMGFMT_BGRA);
+            sbisrc->planes[0] = sb->bitmap;
+            sbi = alloc_mpi(sb->dw, sb->dh, format);
+            region_to_region(sbi, 0, sb->dh, 1, sbisrc, 0, sb->h, 1, csp);
+            free_mp_image(sbisrc);
+
+            mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
+            for (y = 0; y < sb->h; ++y)
+                for (x = 0; x < sb->w; ++x)
+                    sbasrc->planes[0][x + y * sbasrc->stride[0]] = ((unsigned char *) sb->bitmap)[(x + y * sb->stride) * 4 + 3];
+            sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
+            region_to_region(sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, csp);
+            free_mp_image(sbasrc);
+            memset(color_yuv, 0, sizeof(color_yuv));
+            color_yuv[3] = 255;
+        } else if (sbs->format == SUBBITMAP_LIBASS && !sbs->scaled) {
+            // swscale alpha only
+            sba = new_mp_image(sb->w, sb->h);
+            mp_image_setfmt(sba, IMGFMT_Y8);
+            sba->planes[0] = sb->bitmap;
+            sba->stride[0] = sb->stride;
+            int r = (sb->libass.color >> 24) & 0xFF;
+            int g = (sb->libass.color >> 16) & 0xFF;
+            int b = (sb->libass.color >> 8) & 0xFF;
+            int a = sb->libass.color & 0xFF;
+            color_yuv[0] = MP_MAP_RGB2YUV_COLOR(rgb2yuv, r / 255.0, g / 255.0, b / 255.0, 0) * 255.0;
+            color_yuv[1] = MP_MAP_RGB2YUV_COLOR(rgb2yuv, r / 255.0, g / 255.0, b / 255.0, 1) * 255.0;
+            color_yuv[2] = MP_MAP_RGB2YUV_COLOR(rgb2yuv, r / 255.0, g / 255.0, b / 255.0, 2) * 255.0;
+            color_yuv[3] = 255 - a;
+            // NOTE: these overflows can actually happen (when subtitles use color 0,0,0 while output levels only allows 16,16,16 upwards...)
+            if(color_yuv[0] < 0)
+                color_yuv[0] = 0;
+            if(color_yuv[1] < 0)
+                color_yuv[1] = 0;
+            if(color_yuv[2] < 0)
+                color_yuv[2] = 0;
+            if(color_yuv[3] < 0)
+                color_yuv[3] = 0;
+            if(color_yuv[0] > 255)
+                color_yuv[0] = 255;
+            if(color_yuv[1] > 255)
+                color_yuv[1] = 255;
+            if(color_yuv[2] > 255)
+                color_yuv[2] = 255;
+            if(color_yuv[3] > 255)
+                color_yuv[3] = 255;
+        } else {
+            mp_msg(MSGT_VO, MSGL_ERR, "render_sub_bitmap: invalid sub bitmap type\n");
+            continue;
+        }
+
         // call blend_with_alpha 3 times
         int p;
-        for(p = 0; p < 3; ++p)
+        for(p = 0; p < 1; ++p) // FIXME 3
             blend_with_alpha(
-                    ((uint16_t *) (temp->planes[p] + (dst_y - firstRow) * temp->stride[p])) + dst_x,
+                    (temp->planes[p] + (dst_y - firstRow) * temp->stride[p]) + dst_x * bytes,
                     temp->stride[p],
-                    sbi ? (uint16_t *) sbi->planes[p] + (dst_y - sb->y) * sbi->stride[p] + (dst_x - sb->x) : NULL,
+                    sbi ? sbi->planes[p] + (dst_y - sb->y) * sbi->stride[p] + (dst_x - sb->x) * bytes : NULL,
                     sbi ? sbi->stride[p] : 0,
-                    assformat_color_yuv[p],
+                    color_yuv[p],
                     sba->planes[0] + (dst_y - sb->y) * sba->stride[0] + (dst_x - sb->x),
-                    sba->stride[0], dst_h, dst_w
+                    sba->stride[0],
+                    color_yuv[3],
+                    dst_h, dst_w, bytes
                     );
     }
 
     // convert back
-    region_to_region(dst, firstRow, endRow - firstRow, 1, temp, 0, endRow - firstRow, 1, NULL);
+    region_to_region(dst, firstRow, endRow - firstRow, 1, temp, 0, endRow - firstRow, 1, csp);
 
     // clean up
     free_mp_image(temp);
@@ -751,21 +812,58 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs)
 
 // TODO wire EOSD rendering to render_sub_bitmap
 
-static void draw_osd(struct vo *vo, struct osd_state *osd)
-{
-    struct priv *vc = vo->priv;
-    if(vc->lastimg && vc->lastimg_wants_osd) {
-        osd_update(osd, vc->lastimg->w, vc->lastimg->h);
-        osd_draw_text(osd, vc->lastimg->w, vc->lastimg->h, add_osd_to_lastimg_draw_func, vc);
-    }
-}
-
 static void flip_page_timed(struct vo *vo, unsigned int pts_us, int duration)
 {
 }
 
 static void check_events(struct vo *vo)
 {
+}
+
+static int control(struct vo *vo, uint32_t request, void *data)
+{
+    struct priv *vc = vo->priv;
+    switch (request) {
+    case VOCTRL_QUERY_FORMAT:
+        return query_format(vo, *((uint32_t *)data));
+    case VOCTRL_DRAW_IMAGE:
+        draw_image(vo, (mp_image_t *)data, vo->next_pts);
+        return 0;
+    case VOCTRL_SET_YUV_COLORSPACE:
+        vc->colorspace = *(struct mp_csp_details *)data;
+        if (vc->stream) {
+            encode_lavc_set_csp(vo->encode_lavc_ctx, vc->stream, vc->colorspace.format);
+            encode_lavc_set_csp_levels(vo->encode_lavc_ctx, vc->stream, vc->colorspace.levels_out);
+            vc->colorspace.format = encode_lavc_get_csp(vo->encode_lavc_ctx, vc->stream);
+            vc->colorspace.levels_out = encode_lavc_get_csp_levels(vo->encode_lavc_ctx, vc->stream);
+        }
+        return 1;
+    case VOCTRL_GET_YUV_COLORSPACE:
+        *(struct mp_csp_details *)data = vc->colorspace;
+        return 1;
+    case VOCTRL_DRAW_EOSD:
+        if (!data)
+            return VO_FALSE;
+        if (vc->lastimg && vc->lastimg_wants_osd) {
+            struct sub_bitmaps *imgs = data;
+            render_sub_bitmap(vc->lastimg, imgs, &vc->colorspace);
+        }
+        return VO_TRUE;
+    case VOCTRL_GET_EOSD_RES: {
+        struct mp_eosd_res *r = data;
+        r->w = vc->stream->codec->width;
+        r->h = vc->stream->codec->height;
+        r->ml = r->mr = 0;
+        r->mt = r->mb = 0;
+        return VO_TRUE;
+    }
+    case VOCTRL_QUERY_EOSD_FORMAT: {
+        int format = *(int *)data;
+        return (format == SUBBITMAP_LIBASS || format == SUBBITMAP_RGBA)
+               ? VO_TRUE : VO_NOTIMPL;
+    }
+    }
+    return VO_NOTIMPL;
 }
 
 const struct vo_driver video_out_lavc = {
@@ -782,7 +880,7 @@ const struct vo_driver video_out_lavc = {
     .control = control,
     .uninit = uninit,
     .check_events = check_events,
-    .draw_osd = draw_osd,
+    .draw_osd = draw_osd_with_eosd,
     .flip_page_timed = flip_page_timed,
 };
 

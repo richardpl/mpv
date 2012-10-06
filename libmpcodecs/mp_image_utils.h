@@ -16,13 +16,16 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef MPLAYER_VF_SCALE_H
-#define MPLAYER_VF_SCALE_H
+#ifndef MPLAYER_MP_IMAGE_UTILS_H
+#define MPLAYER_MP_IMAGE_UTILS_H
 
-struct SwsContext *sws_getContextFromCmdLine(int srcW, int srcH, int srcFormat, int dstW, int dstH, int dstFormat);
-struct SwsContext *sws_getContextFromCmdLine_hq(int srcW, int srcH, int srcFormat, int dstW, int dstH, int dstFormat);
-
+struct mp_image;
 struct mp_csp_details;
-int mp_sws_set_colorspace(struct SwsContext *sws, struct mp_csp_details *csp);
 
-#endif /* MPLAYER_VF_SCALE_H */
+// sws stuff
+void mp_image_swscale_rows(struct mp_image *dst, int dstRow, int dstRows, int dstRowStep, const struct mp_image *src, int srcRow, int srcRows, int srcRowStep, struct mp_csp_details *csp);
+
+// alpha blending
+void mp_image_blend_plane_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint8_t *src, ssize_t srcRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols, int bytes);
+
+#endif /* MPLAYER_MP_IMAGE_UTILS_H */

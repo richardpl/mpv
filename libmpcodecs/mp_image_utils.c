@@ -27,6 +27,7 @@
 #include "libmpcodecs/img_format.h"
 #include "libvo/csputils.h"
 
+#define SWS_MIN_BITS (16*8) // libswscale currently requires 16 bytes alignment
 void mp_image_get_supported_regionstep(int *sx, int *sy,
                                        const struct mp_image *img)
 {
@@ -44,19 +45,8 @@ void mp_image_get_supported_regionstep(int *sx, int *sy,
 
     for (p = 0; p < img->num_planes; ++p) {
         int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(img, p);
-        if (bits % 8 == 0) // bytes: all is good
-            continue;
-        if (*sx % 2)
+        while (*sx * bits % SWS_MIN_BITS)
             *sx *= 2;
-        if (bits % 4 == 0) // halfbytes: need even number of them
-            continue;
-        if (*sx % 4)
-            *sx *= 2;
-        if (bits % 2 == 0) // quarterbytes: need 4k number of them
-            continue;
-        if (*sx % 8)
-            *sx *= 2;
-        // otherwise, we need an 8k number
     }
 }
 

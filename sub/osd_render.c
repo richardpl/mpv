@@ -18,11 +18,73 @@
 
 #include "sub/osd_render.h"
 
+#include <stdbool.h>
+
 #include "sub/sub.h"
 #include "libmpcodecs/mp_image.h"
 #include "libmpcodecs/mp_image_utils.h"
 #include "libmpcodecs/img_format.h"
 #include "libvo/csputils.h"
+
+static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv, int *color_a, struct mp_image **sba, struct sub_bitmap *sb, int format)
+{
+    *sbi = NULL;
+    *sba = NULL;
+    if (format == SUBBITMAP_RGBA && sb->w >= 8) { // >= 8 because of libswscale madness
+        // swscale the bitmap from w*h to dw*dh, changing BGRA8 into YUV444P16 and make a scaled copy of A8
+        mp_image_t *sbisrc = new_mp_image(sb->w, sb->h);
+        mp_image_setfmt(sbisrc, IMGFMT_BGRA);
+        sbisrc->planes[0] = sb->bitmap;
+        *sbi = alloc_mpi(sb->dw, sb->dh, format);
+        mp_image_swscale_rows(*sbi, 0, sb->dh, 1, sbisrc, 0, sb->h, 1, csp);
+        free_mp_image(sbisrc);
+
+        mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
+        for (y = 0; y < sb->h; ++y)
+            for (x = 0; x < sb->w; ++x)
+                sbasrc->planes[0][x + y * sbasrc->stride[0]] = ((unsigned char *) sb->bitmap)[(x + y * sb->stride) * 4 + 3];
+        *sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
+        mp_image_swscale_rows(*sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, csp);
+        free_mp_image(sbasrc);
+        color_yuv[0] = 255;
+        color_yuv[1] = 128;
+        color_yuv[2] = 128;
+        *color_a = 255;
+        return true;
+    } else if (format == SUBBITMAP_LIBASS && sb->w == sb->dw && sb->h == sb->dh) {
+        // swscale alpha only
+        *sba = new_mp_image(sb->w, sb->h);
+        mp_image_setfmt(*sba, IMGFMT_Y8);
+        (*sba)->planes[0] = sb->bitmap;
+        (*sba)->stride[0] = sb->stride;
+        int r = (sb->libass.color >> 24) & 0xFF;
+        int g = (sb->libass.color >> 16) & 0xFF;
+        int b = (sb->libass.color >> 8) & 0xFF;
+        int a = sb->libass.color & 0xFF;
+        color_yuv[0] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0) * (bytes == 2 ? 257 : 1));
+        color_yuv[1] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1) * (bytes == 2 ? 257 : 1));
+        color_yuv[2] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2) * (bytes == 2 ? 257 : 1));
+        *color_a = 255 - a;
+        // NOTE: these overflows can actually happen (when subtitles use color 0,0,0 while output levels only allows 16,16,16 upwards...)
+        if(color_yuv[0] < 0)
+            color_yuv[0] = 0;
+        if(color_yuv[1] < 0)
+            color_yuv[1] = 0;
+        if(color_yuv[2] < 0)
+            color_yuv[2] = 0;
+        if(*color_a < 0)
+            *color_a = 0;
+        if(color_yuv[0] > (bytes == 2 ? 65535 : 255))
+            color_yuv[0] = (bytes == 2 ? 65535 : 255);
+        if(color_yuv[1] > (bytes == 2 ? 65535 : 255))
+            color_yuv[1] = (bytes == 2 ? 65535 : 255);
+        if(color_yuv[2] > (bytes == 2 ? 65535 : 255))
+            color_yuv[2] = (bytes == 2 ? 65535 : 255);
+        if(*color_a > 255)
+            *color_a = 255;
+        return true;
+    }
+}
 
 void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struct mp_csp_details *csp)
 {
@@ -94,56 +156,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struc
         if (dst_w <= 0 || dst_h <= 0)
             continue;
 
-        if (sbs->format == SUBBITMAP_RGBA && sb->w >= 8) { // >= 8 because of libswscale madness
-            // swscale the bitmap from w*h to dw*dh, changing BGRA8 into YUV444P16 and make a scaled copy of A8
-            mp_image_t *sbisrc = new_mp_image(sb->w, sb->h);
-            mp_image_setfmt(sbisrc, IMGFMT_BGRA);
-            sbisrc->planes[0] = sb->bitmap;
-            sbi = alloc_mpi(sb->dw, sb->dh, format);
-            mp_image_swscale_rows(sbi, 0, sb->dh, 1, sbisrc, 0, sb->h, 1, csp);
-            free_mp_image(sbisrc);
-
-            mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
-            for (y = 0; y < sb->h; ++y)
-                for (x = 0; x < sb->w; ++x)
-                    sbasrc->planes[0][x + y * sbasrc->stride[0]] = ((unsigned char *) sb->bitmap)[(x + y * sb->stride) * 4 + 3];
-            sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
-            mp_image_swscale_rows(sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, csp);
-            free_mp_image(sbasrc);
-            memset(color_yuv, 0, sizeof(color_yuv));
-            color_a = 255;
-        } else if (sbs->format == SUBBITMAP_LIBASS && !sbs->scaled) {
-            // swscale alpha only
-            sba = new_mp_image(sb->w, sb->h);
-            mp_image_setfmt(sba, IMGFMT_Y8);
-            sba->planes[0] = sb->bitmap;
-            sba->stride[0] = sb->stride;
-            int r = (sb->libass.color >> 24) & 0xFF;
-            int g = (sb->libass.color >> 16) & 0xFF;
-            int b = (sb->libass.color >> 8) & 0xFF;
-            int a = sb->libass.color & 0xFF;
-            color_yuv[0] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0) * (bytes == 2 ? 257 : 1));
-            color_yuv[1] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1) * (bytes == 2 ? 257 : 1));
-            color_yuv[2] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2) * (bytes == 2 ? 257 : 1));
-            color_a = 255 - a;
-            // NOTE: these overflows can actually happen (when subtitles use color 0,0,0 while output levels only allows 16,16,16 upwards...)
-            if(color_yuv[0] < 0)
-                color_yuv[0] = 0;
-            if(color_yuv[1] < 0)
-                color_yuv[1] = 0;
-            if(color_yuv[2] < 0)
-                color_yuv[2] = 0;
-            if(color_a < 0)
-                color_a = 0;
-            if(color_yuv[0] > (bytes == 2 ? 65535 : 255))
-                color_yuv[0] = (bytes == 2 ? 65535 : 255);
-            if(color_yuv[1] > (bytes == 2 ? 65535 : 255))
-                color_yuv[1] = (bytes == 2 ? 65535 : 255);
-            if(color_yuv[2] > (bytes == 2 ? 65535 : 255))
-                color_yuv[2] = (bytes == 2 ? 65535 : 255);
-            if(color_a > 255)
-                color_a = 255;
-        } else {
+        if (!sub_bitmap_to_mp_images(&sbi, color_yuv, &color_a, &sba, sb, sbs->format)) {
             mp_msg(MSGT_VO, MSGL_ERR, "render_sub_bitmap: invalid sub bitmap type\n");
             continue;
         }

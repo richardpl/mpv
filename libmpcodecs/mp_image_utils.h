@@ -25,7 +25,7 @@ struct mp_csp_details;
 // sws stuff
 void mp_image_swscale_rows(struct mp_image *dst, int dstRow, int dstRows, int dstRowStep, const struct mp_image *src, int srcRow, int srcRows, int srcRowStep, struct mp_csp_details *csp);
 
-// alpha blending
+// alpha blending (this works on single planes!)
 void mp_image_blend_plane_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint8_t *src, ssize_t srcRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols, int bytes);
 
 #endif /* MPLAYER_MP_IMAGE_UTILS_H */

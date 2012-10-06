@@ -243,8 +243,8 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
     }
 
     // convert back
-    mp_image_swscale_region(dst,
-		    x1, y1, x2 - x1, y2 - y1, 1,
+    mp_image_swscale_region(
+		    dst, x1, y1, x2 - x1, y2 - y1, 1,
 		    temp, 0, 0, x2 - x1, y2 - y1, 1,
 		    csp);
 

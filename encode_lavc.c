@@ -1069,4 +1069,4 @@ enum mp_csp_levels encode_lavc_get_csp_levels(struct encode_lavc_context *ctx,
     return avcol_range_to_mp_csp_levels(stream->codec->color_range);
 }
 
-// vim: ts=4 sw=4 et
+// vim: ts=4 sw=4 et tw=80

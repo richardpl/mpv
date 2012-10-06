@@ -610,3 +610,5 @@ const struct ao_driver audio_out_lavc = {
     .get_space = get_space,
     .play      = play,
 };
+
+// vim: sw=4 ts=4 et tw=80

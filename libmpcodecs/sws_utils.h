@@ -35,16 +35,10 @@ struct SwsContext *sws_getContextFromCmdLine_hq(int srcW, int srcH,
                                                 int dstFormat);
 int mp_sws_set_colorspace(struct SwsContext *sws, struct mp_csp_details *csp);
 
-// sws stuff
-void mp_image_get_supported_regionstep(int *sx, int *sy,
-                                       const struct mp_image *img);
 void mp_image_swscale(struct mp_image *dst,
                       const struct mp_image *src,
                       struct mp_csp_details *csp);
-void mp_image_swscale_region(struct mp_image *dst,
-                             int dx, int dy, int dw, int dh, int dstRowStep,
-                             const struct mp_image *src,
-                             int sx, int sy, int sw, int sh, int srcRowStep,
-                             struct mp_csp_details *csp);
 
 #endif /* MP_SWS_UTILS_H */
+
+// vim: ts=4 sw=4 et tw=80

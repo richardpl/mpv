@@ -252,6 +252,17 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         return false;
 }
 
+static void mp_image_crop(struct mp_image *img, int x, int y, int w, int h)
+{
+    int p;
+    for (p = 0; p < img->num_planes; ++p) {
+        int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(img, p);
+        img->planes[p] += y * img->stride[p] + (x * bits) / 8;
+    }
+    img->w = w;
+    img->h = h;
+}
+
 static bool clip_to_bounds(int *x, int *y, int *w, int *h,
                            int bx, int by, int bw, int bh)
 {
@@ -274,6 +285,29 @@ static bool clip_to_bounds(int *x, int *y, int *w, int *h,
     return true;
 }
 
+#define SWS_MIN_BITS (16 * 8) // libswscale currently requires 16 bytes alignment
+static void get_swscale_requirements(int *sx, int *sy,
+                                       const struct mp_image *img)
+{
+    int p;
+
+    if (img->chroma_x_shift == 31)
+        *sx = 1;
+    else
+        *sx = (1 << img->chroma_x_shift);
+
+    if (img->chroma_y_shift == 31)
+        *sy = 1;
+    else
+        *sy = (1 << img->chroma_y_shift);
+
+    for (p = 0; p < img->num_planes; ++p) {
+        int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(img, p);
+        while (*sx * bits % SWS_MIN_BITS)
+            *sx *= 2;
+    }
+}
+
 static void align_bbox(int *x1, int *y1, int *x2, int *y2, int xstep, int ystep)
 {
     *x1 -= (*x1 % xstep);
@@ -283,6 +317,25 @@ static void align_bbox(int *x1, int *y1, int *x2, int *y2, int xstep, int ystep)
     *y2 += ystep - 1;
     *x2 -= (*x2 % xstep);
     *y2 -= (*y2 % ystep);
+}
+
+bool align_bbox_to_swscale_requirements(int *x1, int *y1, int *x2, int *y2,
+                                        struct mp_image *img)
+{
+    int xstep, int ystep;
+    get_swscale_requirements(&xstep, &ystep, img);
+    align_bbox(x1, y1, x2, y2, xstep, ystep);
+
+    if (x1 < 0)
+        x1 = 0;
+    if (y1 < 0)
+        y1 = 0;
+    if (x2 > img->w)
+        x2 = img->w;
+    if (y2 > img->h)
+        y2 = img->h;
+
+    return (x2 > x1) && (y2 > y1);
 }
 
 void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
@@ -318,26 +371,14 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
     if (!sub_bitmaps_bb(sbs, &x1, &y1, &x2, &y2))
         return;
 
-    mp_image_get_supported_regionstep(&xstep, &ystep, dst);
-    align_bbox(&x1, &y1, &x2, &y2, xstep, ystep);
-
-    if (x1 < 0)
-        x1 = 0;
-    if (y1 < 0)
-        y1 = 0;
-    if (x2 > dst->w)
-        x2 = dst->w;
-    if (y2 > dst->h)
-        y2 = dst->h;
-    if (x1 >= x2 || y1 >= y2)
+    if (!align_bbox_to_swscale_requirements(&x1, &y1, &x2, &y2, dst))
         return;  // nothing to do
 
     // convert to a temp image
     mp_image_t *temp = alloc_mpi(x2 - x1, y2 - y1, format);
-    mp_image_swscale_region(
-        temp, 0, 0, x2 - x1, y2 - y1, 1,
-        dst, x1, y1, x2 - x1, y2 - y1, 1,
-        csp);
+    mp_image_t dst_region = *dst;
+    mp_image_crop(&dst_region, x1, y1, x2 - x1, y2 - y1);
+    mp_image_swscale(temp, &dst_region, csp);
 
     for (i = 0; i < sbs->num_parts; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
@@ -395,11 +436,10 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
     }
 
     // convert back
-    mp_image_swscale_region(
-        dst, x1, y1, x2 - x1, y2 - y1, 1,
-        temp, 0, 0, x2 - x1, y2 - y1, 1,
-        csp);
+    mp_image_swscale(&dst_region, temp, csp);
 
     // clean up
     free_mp_image(temp);
 }
+
+// vim: ts=4 sw=4 et tw=80

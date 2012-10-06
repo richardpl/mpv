@@ -19,3 +19,5 @@ void encode_lavc_expect_stream(struct encode_lavc_context *ctx, enum AVMediaType
 bool encode_lavc_didfail(struct encode_lavc_context *ctx); // check if encoding failed
 
 #endif
+
+// vim: sw=4 ts=4 et tw=80

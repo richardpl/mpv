@@ -548,4 +548,4 @@ const struct vo_driver video_out_lavc = {
     .flip_page_timed = flip_page_timed,
 };
 
-// vim: sw=4 ts=4 et
+// vim: sw=4 ts=4 et tw=80

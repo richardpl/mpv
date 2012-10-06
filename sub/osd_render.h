@@ -26,3 +26,5 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
                             struct mp_csp_details *csp);
 
 #endif /* MPLAYER_OSD_RENDER_H */
+
+// vim: ts=4 sw=4 et tw=80

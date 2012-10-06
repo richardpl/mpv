@@ -94,3 +94,5 @@ enum mp_csp_levels encode_lavc_get_csp_levels(struct encode_lavc_context *ctx,
                                               AVStream *stream);
 
 #endif
+
+// vim: ts=4 sw=4 et tw=80

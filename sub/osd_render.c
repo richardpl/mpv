@@ -29,8 +29,10 @@
 static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
                                     int *color_a, struct mp_image **sba,
                                     struct sub_bitmap *sb,
-                                    int format)
+                                    int format, struct mp_csp_details *csp,
+                                    float rgb2yuv[3][4], int bytes)
 {
+    int x, y;
     *sbi = NULL;
     *sba = NULL;
     if (format == SUBBITMAP_RGBA && sb->w >= 8) { // >= 8 because of libswscale madness
@@ -96,13 +98,14 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         if (*color_a > 255)
             *color_a = 255;
         return true;
-    }
+    } else
+        return false;
 }
 
 void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
                             struct mp_csp_details *csp)
 {
-    int i, x, y;
+    int i;
     int x1, y1, x2, y2;
     int color_yuv[3];
     int color_a;
@@ -175,7 +178,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
             continue;
 
         if (!sub_bitmap_to_mp_images(&sbi, color_yuv, &color_a, &sba, sb,
-                                     sbs->format)) {
+                                     sbs->format, csp, rgb2yuv, bytes)) {
             mp_msg(MSGT_VO, MSGL_ERR,
                    "render_sub_bitmap: invalid sub bitmap type\n");
             continue;

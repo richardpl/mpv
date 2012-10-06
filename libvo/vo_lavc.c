@@ -491,8 +491,8 @@ static void blend_const16_with_alpha(uint8_t *dst, ssize_t dstRowStride, uint8_t
         for (j = 0; j < cols; ++j) {
             uint16_t dstp = dstr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
-            srcap = (srcap * srcamul / 255);
-            uint16_t outp = (srcp * srcap * 257 + dstp * (255 - srcap)) / 255;
+            srcap *= srcamul; // now 0..65025
+            uint16_t outp = (srcp * srcap * srcamul + dstp * (65025 - srcap) + 32512) / 65025;
             dstr[j] = outp;
         }
     }
@@ -509,10 +509,8 @@ static void blend_src16_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uin
             uint16_t dstp = dstr[j];
             uint16_t srcp = srcr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
-            srcap = (srcap * srcamul / 255);
-            // uint16_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255; // separate alpha GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
-            srcp = (srcp * srcamul / 255); // premultiply
-            uint16_t outp = srcp * 257 + (dstp * (255 - srcap)) / 255; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+            srcap *= srcamul; // now 0..65025
+            uint16_t outp = (srcp * srcamul + 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
     }
@@ -526,9 +524,9 @@ static void blend_const8_with_alpha(uint8_t *dst, ssize_t dstRowStride, uint8_t 
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
             uint8_t dstp = dstr[j];
-            uint16_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
-            srcap = (srcap * srcamul / 255);
-            uint8_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255;
+            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap *= srcamul; // now 0..65025
+            uint8_t outp = (srcp * srcap + dstp * (65025 - srcap) + 32512) / 65025;
             dstr[j] = outp;
         }
     }
@@ -544,11 +542,9 @@ static void blend_src8_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint
         for (j = 0; j < cols; ++j) {
             uint8_t dstp = dstr[j];
             uint8_t srcp = srcr[j];
-            uint16_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
-            srcap = (srcap * srcamul / 255);
-            // uint8_t outp = (srcp * srcap + dstp * (255 - srcap)) / 255; // separate alpha GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
-            srcp = (srcp * srcamul / 255); // premultiply
-            uint8_t outp = srcp + (dstp * (255 - srcap)) / 255; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap *= srcamul; // now 0..65025
+            uint8_t outp = (srcp * srcamul + 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
     }
@@ -610,8 +606,8 @@ static void region_to_region(mp_image_t *dst, int dstRow, int dstRows, int dstRo
     sws_freeContext(sws);
 }
 
-#define MP_MAP_YUV2RGB_COLOR(m,y,u,v,c) ((m)[c][0] * (y) + (m)[c][1] * (u) + (m)[c][2] * (v) + (m)[c][3])
-#define MP_MAP_RGB2YUV_COLOR(minv,r,g,b,c) ((minv)[c][0] * (r) + (minv)[c][1] * (g) + (minv)[c][2] * (b) + (minv)[c][3])
+#define MP_MAP_YUV2RGB_COLOR(m,y,u,v,scale,c) ((m)[c][0] * (y) + (m)[c][1] * (u) + (m)[c][2] * (v) + (m)[c][3] * (scale))
+#define MP_MAP_RGB2YUV_COLOR(minv,r,g,b,scale,c) ((minv)[c][0] * (r) + (minv)[c][1] * (g) + (minv)[c][2] * (b) + (minv)[c][3] * (scale))
 static void mp_invert_yuv2rgb(float out[3][4], float in[3][4])
 {
     // this is from the DarkPlaces engine, reduces to 3x3. Original code
@@ -664,7 +660,8 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct m
     int i, x, y;
     int firstRow = dst->h;
     int endRow = 0;
-    int color_yuv[4];
+    int color_yuv[3];
+    int color_a;
     float yuv2rgb[3][4];
     float rgb2yuv[3][4];
     struct mp_csp_params cspar = { .colorspace = *csp, .brightness = 0, .contrast = 1, .hue = 0, .saturation = 1, .rgamma = 1, .ggamma = 1, .bgamma = 1, .texture_bits = 8, .input_bits = 8 };
@@ -752,7 +749,7 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct m
             region_to_region(sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, csp);
             free_mp_image(sbasrc);
             memset(color_yuv, 0, sizeof(color_yuv));
-            color_yuv[3] = 255;
+            color_a = 255;
         } else if (sbs->format == SUBBITMAP_LIBASS && !sbs->scaled) {
             // swscale alpha only
             sba = new_mp_image(sb->w, sb->h);
@@ -763,10 +760,10 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct m
             int g = (sb->libass.color >> 16) & 0xFF;
             int b = (sb->libass.color >> 8) & 0xFF;
             int a = sb->libass.color & 0xFF;
-            color_yuv[0] = MP_MAP_RGB2YUV_COLOR(rgb2yuv, r / 255.0, g / 255.0, b / 255.0, 0) * 255.0;
-            color_yuv[1] = MP_MAP_RGB2YUV_COLOR(rgb2yuv, r / 255.0, g / 255.0, b / 255.0, 1) * 255.0;
-            color_yuv[2] = MP_MAP_RGB2YUV_COLOR(rgb2yuv, r / 255.0, g / 255.0, b / 255.0, 2) * 255.0;
-            color_yuv[3] = 255 - a;
+            color_yuv[0] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0) * (bytes == 2 ? 257 : 1));
+            color_yuv[1] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1) * (bytes == 2 ? 257 : 1));
+            color_yuv[2] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2) * (bytes == 2 ? 257 : 1));
+            color_a = 255 - a;
             // NOTE: these overflows can actually happen (when subtitles use color 0,0,0 while output levels only allows 16,16,16 upwards...)
             if(color_yuv[0] < 0)
                 color_yuv[0] = 0;
@@ -776,14 +773,14 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct m
                 color_yuv[2] = 0;
             if(color_yuv[3] < 0)
                 color_yuv[3] = 0;
-            if(color_yuv[0] > 255)
-                color_yuv[0] = 255;
-            if(color_yuv[1] > 255)
-                color_yuv[1] = 255;
-            if(color_yuv[2] > 255)
-                color_yuv[2] = 255;
-            if(color_yuv[3] > 255)
-                color_yuv[3] = 255;
+            if(color_yuv[0] > (bytes == 2 ? 65535 : 255))
+                color_yuv[0] = (bytes == 2 ? 65535 : 255);
+            if(color_yuv[1] > (bytes == 2 ? 65535 : 255))
+                color_yuv[1] = (bytes == 2 ? 65535 : 255);
+            if(color_yuv[2] > (bytes == 2 ? 65535 : 255))
+                color_yuv[2] = (bytes == 2 ? 65535 : 255);
+            if(color_a > 255)
+                color_a = 255;
         } else {
             mp_msg(MSGT_VO, MSGL_ERR, "render_sub_bitmap: invalid sub bitmap type\n");
             continue;
@@ -800,7 +797,7 @@ static void render_sub_bitmap(mp_image_t *dst, struct sub_bitmaps *sbs, struct m
                     color_yuv[p],
                     sba->planes[0] + (dst_y - sb->y) * sba->stride[0] + (dst_x - sb->x),
                     sba->stride[0],
-                    color_yuv[3],
+                    color_a,
                     dst_h, dst_w, bytes
                     );
 

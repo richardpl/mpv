@@ -319,30 +319,31 @@ static void align_bbox(int *x1, int *y1, int *x2, int *y2, int xstep, int ystep)
     *y2 -= (*y2 % ystep);
 }
 
-bool align_bbox_to_swscale_requirements(int *x1, int *y1, int *x2, int *y2,
-                                        struct mp_image *img)
+static bool align_bbox_to_swscale_requirements(int *x1, int *y1,
+                                               int *x2, int *y2,
+                                               struct mp_image *img)
 {
-    int xstep, int ystep;
+    int xstep, ystep;
     get_swscale_requirements(&xstep, &ystep, img);
     align_bbox(x1, y1, x2, y2, xstep, ystep);
 
-    if (x1 < 0)
-        x1 = 0;
-    if (y1 < 0)
-        y1 = 0;
-    if (x2 > img->w)
-        x2 = img->w;
-    if (y2 > img->h)
-        y2 = img->h;
+    if (*x1 < 0)
+        *x1 = 0;
+    if (*y1 < 0)
+        *y1 = 0;
+    if (*x2 > img->w)
+        *x2 = img->w;
+    if (*y2 > img->h)
+        *y2 = img->h;
 
-    return (x2 > x1) && (y2 > y1);
+    return (*x2 > *x1) && (*y2 > *y1);
 }
 
 void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
                             struct mp_csp_details *csp)
 {
     int i;
-    int x1, y1, x2, y2, xstep, ystep;
+    int x1, y1, x2, y2;
     int color_yuv[3];
     int color_a;
     float yuv2rgb[3][4];

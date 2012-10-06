@@ -22,9 +22,148 @@
 
 #include "sub/sub.h"
 #include "libmpcodecs/mp_image.h"
-#include "libmpcodecs/mp_image_utils.h"
+#include "libmpcodecs/sws_utils.h"
 #include "libmpcodecs/img_format.h"
 #include "libvo/csputils.h"
+
+static void blend_const16_alpha(uint8_t *dst,
+                                ssize_t dstRowStride,
+                                uint8_t srcp,
+                                const uint8_t *srca,
+                                ssize_t srcaRowStride,
+                                uint8_t srcamul, int rows,
+                                int cols)
+{
+    int i, j;
+    for (i = 0; i < rows; ++i) {
+        uint16_t *dstr = (uint16_t *) (dst + dstRowStride * i);
+        const uint8_t *srcar = srca + srcaRowStride * i;
+        for (j = 0; j < cols; ++j) {
+            uint16_t dstp = dstr[j];
+            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap *= srcamul; // now 0..65025
+            uint16_t outp =
+                (srcp * srcap * srcamul + dstp *
+                 (65025 - srcap) + 32512) / 65025;
+            dstr[j] = outp;
+        }
+    }
+}
+
+static void blend_src16_alpha(uint8_t *dst,
+                              ssize_t dstRowStride,
+                              const uint8_t *src,
+                              ssize_t srcRowStride,
+                              const uint8_t *srca,
+                              ssize_t srcaRowStride,
+                              uint8_t srcamul, int rows,
+                              int cols)
+{
+    int i, j;
+    for (i = 0; i < rows; ++i) {
+        uint16_t *dstr = (uint16_t *) (dst + dstRowStride * i);
+        const uint16_t *srcr = (const uint16_t *) (src + srcRowStride * i);
+        const uint8_t *srcar = srca + srcaRowStride * i;
+        for (j = 0; j < cols; ++j) {
+            uint16_t dstp = dstr[j];
+            uint16_t srcp = srcr[j];
+            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap *= srcamul; // now 0..65025
+            uint16_t outp =
+                (srcp * srcamul +
+                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025;                              // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+            dstr[j] = outp;
+        }
+    }
+}
+
+static void blend_const8_alpha(uint8_t *dst,
+                               ssize_t dstRowStride,
+                               uint8_t srcp,
+                               const uint8_t *srca,
+                               ssize_t srcaRowStride,
+                               uint8_t srcamul, int rows,
+                               int cols)
+{
+    int i, j;
+    for (i = 0; i < rows; ++i) {
+        uint8_t *dstr = dst + dstRowStride * i;
+        const uint8_t *srcar = srca + srcaRowStride * i;
+        for (j = 0; j < cols; ++j) {
+            uint8_t dstp = dstr[j];
+            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap *= srcamul; // now 0..65025
+            uint8_t outp =
+                (srcp * srcap + dstp * (65025 - srcap) + 32512) / 65025;
+            dstr[j] = outp;
+        }
+    }
+}
+
+static void blend_src8_alpha(uint8_t *dst,
+                             ssize_t dstRowStride,
+                             const uint8_t *src,
+                             ssize_t srcRowStride,
+                             const uint8_t *srca,
+                             ssize_t srcaRowStride,
+                             uint8_t srcamul, int rows,
+                             int cols)
+{
+    int i, j;
+    for (i = 0; i < rows; ++i) {
+        uint8_t *dstr = dst + dstRowStride * i;
+        const uint8_t *srcr = src + srcRowStride * i;
+        const uint8_t *srcar = srca + srcaRowStride * i;
+        for (j = 0; j < cols; ++j) {
+            uint8_t dstp = dstr[j];
+            uint8_t srcp = srcr[j];
+            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            srcap *= srcamul; // now 0..65025
+            uint8_t outp =
+                (srcp * srcamul +
+                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025;                             // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+            dstr[j] = outp;
+        }
+    }
+}
+
+static void blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
+                            const uint8_t *src, ssize_t srcRowStride,
+                            const uint8_t *srca, ssize_t srcaRowStride,
+                            uint8_t srcamul,
+                            int rows, int cols, int bytes)
+{
+    if (bytes == 2) {
+        blend_src16_alpha(dst, dstRowStride, src,
+                                              srcRowStride, srca,
+                                              srcaRowStride, srcamul, rows,
+                                              cols);
+    } else if (bytes == 1) {
+        blend_src8_alpha(dst, dstRowStride, src,
+                                             srcRowStride, srca,
+                                             srcaRowStride, srcamul, rows,
+                                             cols);
+    }
+}
+
+static void blend_const_alpha(uint8_t *dst, ssize_t dstRowStride,
+                              uint8_t srcp,
+                              const uint8_t *srca, ssize_t srcaRowStride,
+                              uint8_t srcamul,
+                              int rows, int cols, int bytes)
+{
+    if (bytes == 2) {
+        blend_const16_alpha(dst, dstRowStride, srcp,
+                srca, srcaRowStride,
+                srcamul, rows,
+                cols);
+    } else if (bytes == 1) {
+        blend_const8_alpha(dst, dstRowStride, srcp,
+                                               srca, srcaRowStride, srcamul,
+                                               rows,
+                                               cols);
+    }
+}
 
 static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
                                     int *color_a, struct mp_image **sba,
@@ -208,7 +347,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
             continue;
         }
 
-        // call mp_blend_alpha 3 times
+        // call blend_alpha 3 times
         int p;
         for (p = 0; p < 3; ++p) {
             unsigned char *dst_p =
@@ -220,14 +359,14 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
 	    if (sbi) {
                 unsigned char *src_p =
                     sbi->planes[p] + src_y * sbi->stride[p] + src_x * bytes;
-                mp_blend_src_alpha(
+                blend_src_alpha(
                     dst_p, temp->stride[p],
                     src_p, sbi->stride[p],
                     alpha_p, sba->stride[0], color_a,
                     dst_h, dst_w, bytes
                     );
             } else {
-                mp_blend_const_alpha(
+                blend_const_alpha(
                     dst_p, temp->stride[p],
                     color_yuv[p],
                     alpha_p, sba->stride[0], color_a,

@@ -28,7 +28,6 @@
 
 #include "img_format.h"
 #include "mp_image.h"
-#include "mp_image_utils.h"
 #include "vf.h"
 #include "fmt-conversion.h"
 #include "mpbswap.h"

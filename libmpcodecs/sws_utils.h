@@ -21,6 +21,7 @@
 
 #include <libswscale/swscale.h>
 
+struct mp_image;
 struct mp_csp_details;
 
 void sws_getFlagsAndFilterFromCmdLine(int *flags, SwsFilter **srcFilterParam,
@@ -33,5 +34,30 @@ struct SwsContext *sws_getContextFromCmdLine_hq(int srcW, int srcH,
                                                 int dstH,
                                                 int dstFormat);
 int mp_sws_set_colorspace(struct SwsContext *sws, struct mp_csp_details *csp);
+
+// sws stuff
+void mp_image_get_supported_regionstep(int *sx, int *sy,
+                                       const struct mp_image *img);
+void mp_image_swscale(struct mp_image *dst,
+                      const struct mp_image *src,
+                      struct mp_csp_details *csp);
+void mp_image_swscale_region(struct mp_image *dst,
+                             int dx, int dy, int dw, int dh, int dstRowStep,
+                             const struct mp_image *src,
+                             int sx, int sy, int sw, int sh, int srcRowStep,
+                             struct mp_csp_details *csp);
+
+// alpha blending (this works on single planes!)
+// note: src is assumed to be premultiplied
+void mp_blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
+                        const uint8_t *src, ssize_t srcRowStride,
+                        const uint8_t *srca, ssize_t srcaRowStride,
+                        uint8_t srcamul,
+                        int rows, int cols, int bytes);
+void mp_blend_const_alpha(uint8_t *dst, ssize_t dstRowStride,
+                        uint8_t srcp,
+                        const uint8_t *srca, ssize_t srcaRowStride,
+                        uint8_t srcamul,
+                        int rows, int cols, int bytes);
 
 #endif /* MP_SWS_UTILS_H */

@@ -157,7 +157,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
 
         // cut off areas outside the image
         int dst_x = sb->x;
-        int dst_y = sb->y;
+        int dst_y = sb->y - y1; // relative to temp, please!
         int dst_w = sb->dw;
         int dst_h = sb->dh;
         if (dst_x < 0) {
@@ -168,10 +168,10 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
             dst_h += dst_y;
             dst_y = 0;
         }
-        if (dst_x + dst_w > dst->w)
-            dst_w = dst->w - dst_x;
-        if (dst_y + dst_h > dst->h)
-            dst_h = dst->h - dst_y;
+        if (dst_x + dst_w > temp->w)
+            dst_w = temp->w - dst_x;
+        if (dst_y + dst_h > temp->h)
+            dst_h = temp->h - dst_y;
 
         // return if nothing left
         if (dst_w <= 0 || dst_h <= 0)
@@ -188,16 +188,12 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
         int p;
         for (p = 0; p < 3; ++p)
             mp_image_blend_plane_with_alpha(
-                (temp->planes[p] +
-                 (dst_y - y1) * temp->stride[p]) + dst_x * bytes,
+                (temp->planes[p] + dst_y * temp->stride[p]) + dst_x * bytes,
                 temp->stride[p],
-                sbi ? sbi->planes[p] +
-                (dst_y -
-                 sb->y) * sbi->stride[p] + (dst_x - sb->x) * bytes : NULL,
+                sbi ? sbi->planes[p] + (dst_y + y1 - sb->y) * sbi->stride[p] + (dst_x - sb->x) * bytes : NULL,
                 sbi ? sbi->stride[p] : 0,
                 color_yuv[p],
-                sba->planes[0] +
-                (dst_y - sb->y) * sba->stride[0] + (dst_x - sb->x),
+                sba->planes[0] + dst_y * sba->stride[0] + (dst_x - sb->x),
                 sba->stride[0],
                 color_a,
                 dst_h, dst_w, bytes

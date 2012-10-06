@@ -26,6 +26,7 @@
 #include "img_convert.h"
 #include "sub.h"
 #include "spudec.h"
+#include "libmpcodecs/sws_utils.h"
 
 struct osd_conv_cache {
     struct sub_bitmap part;
@@ -199,12 +200,12 @@ bool osd_conv_idx_to_rgba(struct osd_conv_cache *c, struct sub_bitmaps *imgs)
         rgba_to_premultiplied_rgba(sb.palette, 256);
 
         *d = *s;
-        d->stride = s->w * 4;
+        d->stride = FFALIGN(s->w * 4, SWS_MIN_BYTE_ALIGN);
         d->bitmap = talloc_size(c->parts, s->h * d->stride);
 
-        uint32_t *outbmp = d->bitmap;
         for (int y = 0; y < s->h; y++) {
             uint8_t *inbmp = sb.bitmap + y * s->stride;
+            uint32_t *outbmp = (uint32_t*)((uint8_t*)d->bitmap + y * d->stride);
             for (int x = 0; x < s->w; x++)
                 *outbmp++ = sb.palette[*inbmp++];
         }

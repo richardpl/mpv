@@ -16,7 +16,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "sub/osd_render.h"
+#include "sub/draw_bmp.h"
 
 #include <stdbool.h>
 
@@ -338,8 +338,8 @@ static bool align_bbox_to_swscale_requirements(int *x1, int *y1,
     return (*x2 > *x1) && (*y2 > *y1);
 }
 
-void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
-                            struct mp_csp_details *csp)
+void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
+                         struct mp_csp_details *csp)
 {
     int i;
     int x1, y1, x2, y2;

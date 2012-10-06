@@ -34,7 +34,7 @@
 #include "encode_lavc.h"
 
 #include "sub/sub.h"
-#include "sub/osd_render.h"
+#include "sub/draw_bmp.h"
 #include "libvo/osd.h"
 
 struct priv {
@@ -510,7 +510,7 @@ static int control(struct vo *vo, uint32_t request, void *data)
     case VOCTRL_DRAW_EOSD:
         if (vc->lastimg && vc->lastimg_wants_osd) {
             struct sub_bitmaps *imgs = data;
-            osd_render_to_mp_image(vc->lastimg, imgs, &vc->colorspace);
+            mp_draw_sub_bitmaps(vc->lastimg, imgs, &vc->colorspace);
         }
         return VO_TRUE;
     case VOCTRL_GET_EOSD_RES: {

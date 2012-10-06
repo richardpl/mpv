@@ -131,7 +131,7 @@ struct SwsContext *sws_getContextFromCmdLine_hq(int srcW, int srcH,
                SWS_ACCURATE_RND | SWS_BITEXACT);
 }
 
-#define SWS_MIN_BITS (16*8) // libswscale currently requires 16 bytes alignment
+#define SWS_MIN_BITS (16 * 8) // libswscale currently requires 16 bytes alignment
 void mp_image_get_supported_regionstep(int *sx, int *sy,
                                        const struct mp_image *img)
 {
@@ -159,13 +159,16 @@ void mp_image_swscale(struct mp_image *dst,
                       struct mp_csp_details *csp)
 {
     struct SwsContext *sws =
-        sws_getContextFromCmdLine_hq(src->w, src->h, src->imgfmt, dst->w, dst->h,
+        sws_getContextFromCmdLine_hq(src->w, src->h, src->imgfmt,
+                                     dst->w, dst->h,
                                      dst->imgfmt);
     struct mp_csp_details mycsp = MP_CSP_DETAILS_DEFAULTS;
     if (csp)
         mycsp = *csp;
     mp_sws_set_colorspace(sws, &mycsp);
-    sws_scale(sws, (const unsigned char *const *) src->planes, src->stride, 0, src->h, dst->planes, dst->stride);
+    sws_scale(sws, (const unsigned char *const *) src->planes, src->stride,
+              0, src->h,
+              dst->planes, dst->stride);
     sws_freeContext(sws);
 }
 

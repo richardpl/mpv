@@ -55,9 +55,9 @@ void mp_blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
                         uint8_t srcamul,
                         int rows, int cols, int bytes);
 void mp_blend_const_alpha(uint8_t *dst, ssize_t dstRowStride,
-                        uint8_t srcp,
-                        const uint8_t *srca, ssize_t srcaRowStride,
-                        uint8_t srcamul,
-                        int rows, int cols, int bytes);
+                          uint8_t srcp,
+                          const uint8_t *srca, ssize_t srcaRowStride,
+                          uint8_t srcamul,
+                          int rows, int cols, int bytes);
 
 #endif /* MP_SWS_UTILS_H */

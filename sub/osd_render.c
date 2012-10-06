@@ -135,14 +135,14 @@ static void blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
 {
     if (bytes == 2) {
         blend_src16_alpha(dst, dstRowStride, src,
-                                              srcRowStride, srca,
-                                              srcaRowStride, srcamul, rows,
-                                              cols);
+                          srcRowStride, srca,
+                          srcaRowStride, srcamul, rows,
+                          cols);
     } else if (bytes == 1) {
         blend_src8_alpha(dst, dstRowStride, src,
-                                             srcRowStride, srca,
-                                             srcaRowStride, srcamul, rows,
-                                             cols);
+                         srcRowStride, srca,
+                         srcaRowStride, srcamul, rows,
+                         cols);
     }
 }
 
@@ -154,14 +154,14 @@ static void blend_const_alpha(uint8_t *dst, ssize_t dstRowStride,
 {
     if (bytes == 2) {
         blend_const16_alpha(dst, dstRowStride, srcp,
-                srca, srcaRowStride,
-                srcamul, rows,
-                cols);
+                            srca, srcaRowStride,
+                            srcamul, rows,
+                            cols);
     } else if (bytes == 1) {
         blend_const8_alpha(dst, dstRowStride, srcp,
-                                               srca, srcaRowStride, srcamul,
-                                               rows,
-                                               cols);
+                           srca, srcaRowStride, srcamul,
+                           rows,
+                           cols);
     }
 }
 
@@ -241,7 +241,8 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         return false;
 }
 
-static bool clip_to_bounds(int *x, int *y, int *w, int *h, int bx, int by, int bw, int bh)
+static bool clip_to_bounds(int *x, int *y, int *w, int *h,
+                           int bx, int by, int bw, int bh)
 {
     if (*x < bx) {
         *w += *x - bx;
@@ -257,7 +258,7 @@ static bool clip_to_bounds(int *x, int *y, int *w, int *h, int bx, int by, int b
         *h = by + bh - *y;
 
     if (*w <= 0 || *h <= 0)
-        return false; // nothing left
+        return false;  // nothing left
 
     return true;
 }
@@ -323,9 +324,9 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
     // convert to a temp image
     mp_image_t *temp = alloc_mpi(x2 - x1, y2 - y1, format);
     mp_image_swscale_region(
-		    temp, 0, 0, x2 - x1, y2 - y1, 1,
-		    dst, x1, y1, x2 - x1, y2 - y1, 1,
-		    csp);
+        temp, 0, 0, x2 - x1, y2 - y1, 1,
+        dst, x1, y1, x2 - x1, y2 - y1, 1,
+        csp);
 
     for (i = 0; i < sbs->num_parts; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
@@ -337,7 +338,8 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
         int dst_y = sb->y - y1; // coordinates are relative to the bbox
         int dst_w = sb->dw;
         int dst_h = sb->dh;
-	if (!clip_to_bounds(&dst_x, &dst_y, &dst_w, &dst_h, 0, 0, temp->w, temp->h))
+        if (!clip_to_bounds(&dst_x, &dst_y, &dst_w, &dst_h,
+                            0, 0, temp->w, temp->h))
             continue;
 
         if (!sub_bitmap_to_mp_images(&sbi, color_yuv, &color_a, &sba, sb,
@@ -356,7 +358,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
             int src_y = (dst_y + y1) - sb->y;
             unsigned char *alpha_p =
                 sba->planes[0] + src_y * sba->stride[0] + src_x;
-	    if (sbi) {
+            if (sbi) {
                 unsigned char *src_p =
                     sbi->planes[p] + src_y * sbi->stride[p] + src_x * bytes;
                 blend_src_alpha(
@@ -383,9 +385,9 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
 
     // convert back
     mp_image_swscale_region(
-		    dst, x1, y1, x2 - x1, y2 - y1, 1,
-		    temp, 0, 0, x2 - x1, y2 - y1, 1,
-		    csp);
+        dst, x1, y1, x2 - x1, y2 - y1, 1,
+        temp, 0, 0, x2 - x1, y2 - y1, 1,
+        csp);
 
     // clean up
     free_mp_image(temp);

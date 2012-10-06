@@ -123,7 +123,7 @@ static bool clip_to_bounds(int *x, int *y, int *w, int *h, int bx, int by, int b
     return true;
 }
 
-static void expand_bbox_to_steps(int *x1, int *y1, int *x2, int *y2, int xstep, int ystep)
+static void align_bbox(int *x1, int *y1, int *x2, int *y2, int xstep, int ystep)
 {
     *x1 -= (*x1 % xstep);
     *y1 -= (*y1 % ystep);
@@ -168,7 +168,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
         return;
 
     mp_image_get_supported_regionstep(&xstep, &ystep, dst);
-    expand_bbox_to_steps(&x1, &y1, &x2, &y2, xstep, ystep);
+    align_bbox(&x1, &y1, &x2, &y2, xstep, ystep);
 
     if (x1 < 0)
         x1 = 0;

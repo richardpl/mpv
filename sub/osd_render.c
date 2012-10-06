@@ -193,18 +193,19 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
 
         // call mp_image_blend_plane_with_alpha 3 times
         int p;
-        for (p = 0; p < 3; ++p)
+        for (p = 0; p < 3; ++p) {
+            unsigned char *dst_p = (temp->planes[p] + dst_y * temp->stride[p]) + dst_x * bytes;
+            int src_x = dst_x        - sb->x;
+            int src_y = (dst_y + y1) - sb->y;
+            unsigned char *src_p = sbi ? sbi->planes[p] + src_y * sbi->stride[p] + src_x * bytes : NULL;
+            unsigned char *alpha_p = sba->planes[0] + src_y * sba->stride[0] + src_x;
             mp_image_blend_plane_with_alpha(
-                (temp->planes[p] + dst_y * temp->stride[p]) + dst_x * bytes,
-                temp->stride[p],
-                sbi ? sbi->planes[p] + (dst_y + y1 - sb->y) * sbi->stride[p] + (dst_x - sb->x) * bytes : NULL,
-                sbi ? sbi->stride[p] : 0,
-                color_yuv[p],
-                sba->planes[0] + dst_y * sba->stride[0] + (dst_x - sb->x),
-                sba->stride[0],
-                color_a,
+                dst_p, temp->stride[p],
+                src_p, sbi ? sbi->stride[p] : 0, color_yuv[p],
+                alpha_p, sba->stride[0], color_a,
                 dst_h, dst_w, bytes
                 );
+        }
 
         if (sbi)
             free_mp_image(sbi);

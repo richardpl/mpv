@@ -102,6 +102,27 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         return false;
 }
 
+static bool clip_to_bounds(int *x, int *y, int *w, int *h, int bx, int by, int bw, int bh)
+{
+    if (*x < bx) {
+        *w += *x - bx;
+        *x = bx;
+    }
+    if (*y < 0) {
+        *h += *y - by;
+        *y = by;
+    }
+    if (*x + *w > bx + bw)
+        *w = bx + bw - *x;
+    if (*y + *h > by + bh)
+        *h = by + bh - *y;
+
+    if (*w <= 0 || *h <= 0)
+        return false; // nothing left
+
+    return true;
+}
+
 void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
                             struct mp_csp_details *csp)
 {
@@ -160,21 +181,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
         int dst_y = sb->y - y1; // relative to temp, please!
         int dst_w = sb->dw;
         int dst_h = sb->dh;
-        if (dst_x < 0) {
-            dst_w += dst_x;
-            dst_x = 0;
-        }
-        if (dst_y < 0) {
-            dst_h += dst_y;
-            dst_y = 0;
-        }
-        if (dst_x + dst_w > temp->w)
-            dst_w = temp->w - dst_x;
-        if (dst_y + dst_h > temp->h)
-            dst_h = temp->h - dst_y;
-
-        // return if nothing left
-        if (dst_w <= 0 || dst_h <= 0)
+	if (!clip_to_bounds(&dst_x, &dst_y, &dst_w, &dst_h, 0, 0, temp->w, temp->h))
             continue;
 
         if (!sub_bitmap_to_mp_images(&sbi, color_yuv, &color_a, &sba, sb,

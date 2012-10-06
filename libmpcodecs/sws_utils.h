@@ -24,6 +24,11 @@
 struct mp_image;
 struct mp_csp_details;
 
+// libswscale currently requires 16 bytes alignment for row pointers and
+// strides. Otherwise, it will print warnings and use slow codepaths.
+// Guaranteed to be a power of 2 and > 1.
+#define SWS_MIN_BYTE_ALIGN 16
+
 void sws_getFlagsAndFilterFromCmdLine(int *flags, SwsFilter **srcFilterParam,
                                       SwsFilter **dstFilterParam);
 struct SwsContext *sws_getContextFromCmdLine(int srcW, int srcH, int srcFormat,

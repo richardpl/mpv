@@ -285,7 +285,6 @@ static bool clip_to_bounds(int *x, int *y, int *w, int *h,
     return true;
 }
 
-#define SWS_MIN_BITS (16 * 8) // libswscale currently requires 16 bytes alignment
 static void get_swscale_requirements(int *sx, int *sy,
                                        const struct mp_image *img)
 {
@@ -303,7 +302,7 @@ static void get_swscale_requirements(int *sx, int *sy,
 
     for (p = 0; p < img->num_planes; ++p) {
         int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(img, p);
-        while (*sx * bits % SWS_MIN_BITS)
+        while ((*sx * bits) % (SWS_MIN_BYTE_ALIGN * 8))
             *sx *= 2;
     }
 }

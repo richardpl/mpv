@@ -194,10 +194,12 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
         for (y = 0; y < sb->h; ++y)
             for (x = 0; x < sb->w; ++x)
-                sbasrc->planes[0][x + y *
-                                  sbasrc->stride[0]] =
-                    ((unsigned char *) sb->bitmap)[(x + y *
-                                                    sb->stride) * 4 + 3];
+                sbasrc->planes[0][
+                        x + y * sbasrc->stride[0]
+                    ] =
+                    ((unsigned char *) sb->bitmap)[
+                        (x + y * sb->stride) * 4 + 3
+                    ];
         *sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
         mp_image_swscale(*sba, sbasrc, csp);
         free_mp_image(sbasrc);
@@ -206,8 +208,8 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         color_yuv[2] = 128;
         *color_a = 255;
         return true;
-    } else if (format == SUBBITMAP_LIBASS && sb->w == sb->dw && sb->h ==
-               sb->dh) {
+    } else if (format == SUBBITMAP_LIBASS &&
+            sb->w == sb->dw && sb->h == sb->dh) {
         // swscale alpha only
         *sba = new_mp_image(sb->w, sb->h);
         mp_image_setfmt(*sba, IMGFMT_Y8);
@@ -218,14 +220,14 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         int b = (sb->libass.color >> 8) & 0xFF;
         int a = sb->libass.color & 0xFF;
         color_yuv[0] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255,
-                                      0) * (bytes == 2 ? 257 : 1));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0)
+                    * (bytes == 2 ? 257 : 1));
         color_yuv[1] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255,
-                                      1) * (bytes == 2 ? 257 : 1));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1)
+                    * (bytes == 2 ? 257 : 1));
         color_yuv[2] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255,
-                                      2) * (bytes == 2 ? 257 : 1));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2)
+                    * (bytes == 2 ? 257 : 1));
         *color_a = 255 - a;
         // NOTE: these overflows can actually happen (when subtitles use color
         // 0,0,0 while output levels only allows 16,16,16 upwards...)

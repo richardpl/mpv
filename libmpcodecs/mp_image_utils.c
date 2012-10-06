@@ -179,34 +179,40 @@ static void mp_image_blend_plane_src8_with_alpha(uint8_t *dst,
     }
 }
 
-void mp_image_blend_plane_with_alpha(uint8_t *dst, ssize_t dstRowStride,
-                                     const uint8_t *src, ssize_t srcRowStride,
-                                     uint8_t srcp, const uint8_t *srca,
-                                     ssize_t srcaRowStride, uint8_t srcamul,
-                                     int rows, int cols,
-                                     int bytes)
+void mp_image_blend_plane_src_with_alpha(uint8_t *dst, ssize_t dstRowStride,
+                                         const uint8_t *src, ssize_t srcRowStride,
+                                         const uint8_t *srca, ssize_t srcaRowStride,
+                                         uint8_t srcamul,
+                                         int rows, int cols, int bytes)
 {
     if (bytes == 2) {
-        if (src)
-            mp_image_blend_plane_src16_with_alpha(dst, dstRowStride, src,
-                                                  srcRowStride, srca,
-                                                  srcaRowStride, srcamul, rows,
-                                                  cols);
-        else
-            mp_image_blend_plane_const16_with_alpha(dst, dstRowStride, srcp,
-                                                    srca, srcaRowStride,
-                                                    srcamul, rows,
-                                                    cols);
+        mp_image_blend_plane_src16_with_alpha(dst, dstRowStride, src,
+                                              srcRowStride, srca,
+                                              srcaRowStride, srcamul, rows,
+                                              cols);
     } else if (bytes == 1) {
-        if (src)
-            mp_image_blend_plane_src8_with_alpha(dst, dstRowStride, src,
-                                                 srcRowStride, srca,
-                                                 srcaRowStride, srcamul, rows,
-                                                 cols);
-        else
-            mp_image_blend_plane_const8_with_alpha(dst, dstRowStride, srcp,
-                                                   srca, srcaRowStride, srcamul,
-                                                   rows,
-                                                   cols);
+        mp_image_blend_plane_src8_with_alpha(dst, dstRowStride, src,
+                                             srcRowStride, srca,
+                                             srcaRowStride, srcamul, rows,
+                                             cols);
+    }
+}
+
+void mp_image_blend_plane_const_with_alpha(uint8_t *dst, ssize_t dstRowStride,
+                                           uint8_t srcp,
+                                           const uint8_t *srca, ssize_t srcaRowStride,
+                                           uint8_t srcamul,
+                                           int rows, int cols, int bytes)
+{
+    if (bytes == 2) {
+        mp_image_blend_plane_const16_with_alpha(dst, dstRowStride, srcp,
+                srca, srcaRowStride,
+                srcamul, rows,
+                cols);
+    } else if (bytes == 1) {
+        mp_image_blend_plane_const8_with_alpha(dst, dstRowStride, srcp,
+                                               srca, srcaRowStride, srcamul,
+                                               rows,
+                                               cols);
     }
 }

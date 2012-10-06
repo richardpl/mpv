@@ -25,18 +25,30 @@
 #include "libmpcodecs/sws_utils.h"
 #include "libvo/csputils.h"
 
-void mp_image_swscale_rows(struct mp_image *dst, int dstRow, int dstRows, int dstRowStep, const struct mp_image *src, int srcRow, int srcRows, int srcRowStep, struct mp_csp_details *csp)
+void mp_image_swscale_rows(struct mp_image *dst, int dstRow, int dstRows,
+                           int dstRowStep, const struct mp_image *src,
+                           int srcRow, int srcRows,
+                           int srcRowStep,
+                           struct mp_csp_details *csp)
 {
-    int src_chroma_y_shift = src->chroma_y_shift == 31 ? 0 : src->chroma_y_shift;
-    int dst_chroma_y_shift = dst->chroma_y_shift == 31 ? 0 : dst->chroma_y_shift;
+    int src_chroma_y_shift = src->chroma_y_shift ==
+                             31 ? 0 : src->chroma_y_shift;
+    int dst_chroma_y_shift = dst->chroma_y_shift ==
+                             31 ? 0 : dst->chroma_y_shift;
     int mask = ((1 << dst_chroma_y_shift) - 1) | ((1 << src_chroma_y_shift) - 1);
-    if ((dstRow | dstRows | srcRow | srcRows) & mask) {
-        mp_msg(MSGT_VO, MSGL_ERR, "region_to_region: chroma y shift: cannot copy src row %d length %d to dst row %d length %d without problems, the output image may be corrupted (%d, %d, %d)\n", srcRow, srcRows, dstRow, dstRows, mask, dst->chroma_y_shift, src->chroma_y_shift);
-    }
-    struct SwsContext *sws = sws_getContextFromCmdLine_hq(src->w, srcRows, src->imgfmt, dst->w, dstRows, dst->imgfmt);
+    if ((dstRow | dstRows | srcRow | srcRows) & mask)
+        mp_msg(
+            MSGT_VO, MSGL_ERR,
+            "region_to_region: chroma y shift: cannot copy src row %d length %d to dst row %d length %d without problems, the output image may be corrupted (%d, %d, %d)\n",
+            srcRow, srcRows, dstRow, dstRows, mask, dst->chroma_y_shift,
+            src->chroma_y_shift);
+    struct SwsContext *sws =
+        sws_getContextFromCmdLine_hq(src->w, srcRows, src->imgfmt, dst->w,
+                                     dstRows,
+                                     dst->imgfmt);
     struct mp_csp_details mycsp = MP_CSP_DETAILS_DEFAULTS;
     if (csp)
-	    mycsp = *csp;
+        mycsp = *csp;
     mp_sws_set_colorspace(sws, &mycsp);
     const uint8_t *const src_planes[4] = {
         src->planes[0] + srcRow * src->stride[0],
@@ -66,7 +78,13 @@ void mp_image_swscale_rows(struct mp_image *dst, int dstRow, int dstRows, int ds
     sws_freeContext(sws);
 }
 
-static void mp_image_blend_plane_const16_with_alpha(uint8_t *dst, ssize_t dstRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols)
+static void mp_image_blend_plane_const16_with_alpha(uint8_t *dst,
+                                                    ssize_t dstRowStride,
+                                                    uint8_t srcp,
+                                                    const uint8_t *srca,
+                                                    ssize_t srcaRowStride,
+                                                    uint8_t srcamul, int rows,
+                                                    int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
@@ -76,13 +94,22 @@ static void mp_image_blend_plane_const16_with_alpha(uint8_t *dst, ssize_t dstRow
             uint16_t dstp = dstr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
-            uint16_t outp = (srcp * srcap * srcamul + dstp * (65025 - srcap) + 32512) / 65025;
+            uint16_t outp =
+                (srcp * srcap * srcamul + dstp *
+                 (65025 - srcap) + 32512) / 65025;
             dstr[j] = outp;
         }
     }
 }
 
-static void mp_image_blend_plane_src16_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint8_t *src, ssize_t srcRowStride, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols)
+static void mp_image_blend_plane_src16_with_alpha(uint8_t *dst,
+                                                  ssize_t dstRowStride,
+                                                  const uint8_t *src,
+                                                  ssize_t srcRowStride,
+                                                  const uint8_t *srca,
+                                                  ssize_t srcaRowStride,
+                                                  uint8_t srcamul, int rows,
+                                                  int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
@@ -94,13 +121,21 @@ static void mp_image_blend_plane_src16_with_alpha(uint8_t *dst, ssize_t dstRowSt
             uint16_t srcp = srcr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
-            uint16_t outp = (srcp * srcamul + 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+            uint16_t outp =
+                (srcp * srcamul +
+                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025;                              // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
     }
 }
 
-static void mp_image_blend_plane_const8_with_alpha(uint8_t *dst, ssize_t dstRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols)
+static void mp_image_blend_plane_const8_with_alpha(uint8_t *dst,
+                                                   ssize_t dstRowStride,
+                                                   uint8_t srcp,
+                                                   const uint8_t *srca,
+                                                   ssize_t srcaRowStride,
+                                                   uint8_t srcamul, int rows,
+                                                   int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
@@ -110,13 +145,21 @@ static void mp_image_blend_plane_const8_with_alpha(uint8_t *dst, ssize_t dstRowS
             uint8_t dstp = dstr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
-            uint8_t outp = (srcp * srcap + dstp * (65025 - srcap) + 32512) / 65025;
+            uint8_t outp =
+                (srcp * srcap + dstp * (65025 - srcap) + 32512) / 65025;
             dstr[j] = outp;
         }
     }
 }
 
-static void mp_image_blend_plane_src8_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint8_t *src, ssize_t srcRowStride, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols)
+static void mp_image_blend_plane_src8_with_alpha(uint8_t *dst,
+                                                 ssize_t dstRowStride,
+                                                 const uint8_t *src,
+                                                 ssize_t srcRowStride,
+                                                 const uint8_t *srca,
+                                                 ssize_t srcaRowStride,
+                                                 uint8_t srcamul, int rows,
+                                                 int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
@@ -128,23 +171,42 @@ static void mp_image_blend_plane_src8_with_alpha(uint8_t *dst, ssize_t dstRowStr
             uint8_t srcp = srcr[j];
             uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
-            uint8_t outp = (srcp * srcamul + 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025; // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+            uint8_t outp =
+                (srcp * srcamul +
+                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025;                             // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
     }
 }
 
-void mp_image_blend_plane_with_alpha(uint8_t *dst, ssize_t dstRowStride, const uint8_t *src, ssize_t srcRowStride, uint8_t srcp, const uint8_t *srca, ssize_t srcaRowStride, uint8_t srcamul, int rows, int cols, int bytes)
+void mp_image_blend_plane_with_alpha(uint8_t *dst, ssize_t dstRowStride,
+                                     const uint8_t *src, ssize_t srcRowStride,
+                                     uint8_t srcp, const uint8_t *srca,
+                                     ssize_t srcaRowStride, uint8_t srcamul,
+                                     int rows, int cols,
+                                     int bytes)
 {
     if (bytes == 2) {
         if (src)
-            mp_image_blend_plane_src16_with_alpha(dst, dstRowStride, src, srcRowStride, srca, srcaRowStride, srcamul, rows, cols);
+            mp_image_blend_plane_src16_with_alpha(dst, dstRowStride, src,
+                                                  srcRowStride, srca,
+                                                  srcaRowStride, srcamul, rows,
+                                                  cols);
         else
-            mp_image_blend_plane_const16_with_alpha(dst, dstRowStride, srcp, srca, srcaRowStride, srcamul, rows, cols);
+            mp_image_blend_plane_const16_with_alpha(dst, dstRowStride, srcp,
+                                                    srca, srcaRowStride,
+                                                    srcamul, rows,
+                                                    cols);
     } else if (bytes == 1) {
         if (src)
-            mp_image_blend_plane_src8_with_alpha(dst, dstRowStride, src, srcRowStride, srca, srcaRowStride, srcamul, rows, cols);
+            mp_image_blend_plane_src8_with_alpha(dst, dstRowStride, src,
+                                                 srcRowStride, srca,
+                                                 srcaRowStride, srcamul, rows,
+                                                 cols);
         else
-            mp_image_blend_plane_const8_with_alpha(dst, dstRowStride, srcp, srca, srcaRowStride, srcamul, rows, cols);
+            mp_image_blend_plane_const8_with_alpha(dst, dstRowStride, srcp,
+                                                   srca, srcaRowStride, srcamul,
+                                                   rows,
+                                                   cols);
     }
 }

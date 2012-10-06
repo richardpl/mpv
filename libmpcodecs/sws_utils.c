@@ -23,79 +23,106 @@
 #include "fmt-conversion.h"
 
 //global sws_flags from the command line
-int sws_flags=2;
+int sws_flags = 2;
 
-float sws_lum_gblur= 0.0;
-float sws_chr_gblur= 0.0;
-int sws_chr_vshift= 0;
-int sws_chr_hshift= 0;
-float sws_chr_sharpen= 0.0;
-float sws_lum_sharpen= 0.0;
+float sws_lum_gblur = 0.0;
+float sws_chr_gblur = 0.0;
+int sws_chr_vshift = 0;
+int sws_chr_hshift = 0;
+float sws_chr_sharpen = 0.0;
+float sws_lum_sharpen = 0.0;
 
 //global srcFilter
-static SwsFilter *src_filter= NULL;
+static SwsFilter *src_filter = NULL;
 
-void sws_getFlagsAndFilterFromCmdLine(int *flags, SwsFilter **srcFilterParam, SwsFilter **dstFilterParam)
+void sws_getFlagsAndFilterFromCmdLine(int *flags, SwsFilter **srcFilterParam,
+                                      SwsFilter **dstFilterParam)
 {
-	static int firstTime=1;
-	*flags=0;
+    static int firstTime = 1;
+    *flags = 0;
 
-	if(firstTime)
-	{
-		firstTime=0;
-		*flags= SWS_PRINT_INFO;
-	}
-	else if( mp_msg_test(MSGT_VFILTER,MSGL_DBG2) ) *flags= SWS_PRINT_INFO;
+    if (firstTime) {
+        firstTime = 0;
+        *flags = SWS_PRINT_INFO;
+    } else if (mp_msg_test(MSGT_VFILTER, MSGL_DBG2))
+        *flags = SWS_PRINT_INFO;
 
-	if(src_filter) sws_freeFilter(src_filter);
+    if (src_filter)
+        sws_freeFilter(src_filter);
 
-	src_filter= sws_getDefaultFilter(
-		sws_lum_gblur, sws_chr_gblur,
-		sws_lum_sharpen, sws_chr_sharpen,
-		sws_chr_hshift, sws_chr_vshift, verbose>1);
+    src_filter = sws_getDefaultFilter(
+        sws_lum_gblur, sws_chr_gblur,
+        sws_lum_sharpen, sws_chr_sharpen,
+        sws_chr_hshift, sws_chr_vshift, verbose > 1);
 
-	switch(sws_flags)
-	{
-		case 0: *flags|= SWS_FAST_BILINEAR; break;
-		case 1: *flags|= SWS_BILINEAR; break;
-		case 2: *flags|= SWS_BICUBIC; break;
-		case 3: *flags|= SWS_X; break;
-		case 4: *flags|= SWS_POINT; break;
-		case 5: *flags|= SWS_AREA; break;
-		case 6: *flags|= SWS_BICUBLIN; break;
-		case 7: *flags|= SWS_GAUSS; break;
-		case 8: *flags|= SWS_SINC; break;
-		case 9: *flags|= SWS_LANCZOS; break;
-		case 10:*flags|= SWS_SPLINE; break;
-		default:*flags|= SWS_BILINEAR; break;
-	}
+    switch (sws_flags) {
+    case 0: *flags |= SWS_FAST_BILINEAR;
+        break;
+    case 1: *flags |= SWS_BILINEAR;
+        break;
+    case 2: *flags |= SWS_BICUBIC;
+        break;
+    case 3: *flags |= SWS_X;
+        break;
+    case 4: *flags |= SWS_POINT;
+        break;
+    case 5: *flags |= SWS_AREA;
+        break;
+    case 6: *flags |= SWS_BICUBLIN;
+        break;
+    case 7: *flags |= SWS_GAUSS;
+        break;
+    case 8: *flags |= SWS_SINC;
+        break;
+    case 9: *flags |= SWS_LANCZOS;
+        break;
+    case 10: *flags |= SWS_SPLINE;
+        break;
+    default: *flags |= SWS_BILINEAR;
+        break;
+    }
 
-	*srcFilterParam= src_filter;
-	*dstFilterParam= NULL;
+    *srcFilterParam = src_filter;
+    *dstFilterParam = NULL;
 }
 
 // will use sws_flags & src_filter (from cmd line)
-static struct SwsContext *sws_getContextFromCmdLine2(int srcW, int srcH, int srcFormat, int dstW, int dstH, int dstFormat, int extraflags)
+static struct SwsContext *sws_getContextFromCmdLine2(int srcW, int srcH,
+                                                     int srcFormat, int dstW,
+                                                     int dstH, int dstFormat,
+                                                     int extraflags)
 {
-	int flags;
-	SwsFilter *dstFilterParam, *srcFilterParam;
-	enum PixelFormat dfmt, sfmt;
+    int flags;
+    SwsFilter *dstFilterParam, *srcFilterParam;
+    enum PixelFormat dfmt, sfmt;
 
-	dfmt = imgfmt2pixfmt(dstFormat);
-	sfmt = imgfmt2pixfmt(srcFormat);
-	if (srcFormat == IMGFMT_RGB8 || srcFormat == IMGFMT_BGR8) sfmt = PIX_FMT_PAL8;
-	sws_getFlagsAndFilterFromCmdLine(&flags, &srcFilterParam, &dstFilterParam);
+    dfmt = imgfmt2pixfmt(dstFormat);
+    sfmt = imgfmt2pixfmt(srcFormat);
+    if (srcFormat == IMGFMT_RGB8 || srcFormat == IMGFMT_BGR8)
+        sfmt = PIX_FMT_PAL8;
+    sws_getFlagsAndFilterFromCmdLine(&flags, &srcFilterParam, &dstFilterParam);
 
-	return sws_getContext(srcW, srcH, sfmt, dstW, dstH, dfmt, flags | extraflags, srcFilterParam, dstFilterParam, NULL);
+    return sws_getContext(srcW, srcH, sfmt, dstW, dstH, dfmt, flags |
+                          extraflags, srcFilterParam, dstFilterParam,
+                          NULL);
 }
 
-struct SwsContext *sws_getContextFromCmdLine(int srcW, int srcH, int srcFormat, int dstW, int dstH, int dstFormat)
+struct SwsContext *sws_getContextFromCmdLine(int srcW, int srcH, int srcFormat,
+                                             int dstW, int dstH,
+                                             int dstFormat)
 {
-    return sws_getContextFromCmdLine2(srcW, srcH, srcFormat, dstW, dstH, dstFormat, 0);
+    return sws_getContextFromCmdLine2(srcW, srcH, srcFormat, dstW, dstH,
+                                      dstFormat,
+                                      0);
 }
 
-struct SwsContext *sws_getContextFromCmdLine_hq(int srcW, int srcH, int srcFormat, int dstW, int dstH, int dstFormat)
+struct SwsContext *sws_getContextFromCmdLine_hq(int srcW, int srcH,
+                                                int srcFormat, int dstW,
+                                                int dstH,
+                                                int dstFormat)
 {
-    return sws_getContextFromCmdLine2(srcW, srcH, srcFormat, dstW, dstH, dstFormat,
-        SWS_FULL_CHR_H_INT | SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_BITEXACT);
+    return sws_getContextFromCmdLine2(
+               srcW, srcH, srcFormat, dstW, dstH, dstFormat,
+               SWS_FULL_CHR_H_INT | SWS_FULL_CHR_H_INP |
+               SWS_ACCURATE_RND | SWS_BITEXACT);
 }

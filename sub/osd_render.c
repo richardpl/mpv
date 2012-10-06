@@ -27,13 +27,13 @@
 void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struct mp_csp_details *csp)
 {
     int i, x, y;
-    int firstRow = dst->h;
-    int endRow = 0;
+    int x1, y1, x2, y2;
     int color_yuv[3];
     int color_a;
     float yuv2rgb[3][4];
     float rgb2yuv[3][4];
     struct mp_csp_params cspar = { .colorspace = *csp, .brightness = 0, .contrast = 1, .hue = 0, .saturation = 1, .rgamma = 1, .ggamma = 1, .bgamma = 1, .texture_bits = 8, .input_bits = 8 };
+
 #if 1
     int format = IMGFMT_444P16;
     int bytes = 2;
@@ -47,30 +47,23 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struc
     mp_invert_yuv2rgb(rgb2yuv, yuv2rgb);
 
     // calculate bounding range
-    for (i = 0; i < sbs->num_parts; ++i) {
-        struct sub_bitmap *sb = &sbs->parts[i];
-        if (sb->y < firstRow)
-            firstRow = sb->y;
-        if (sb->y + sb->dh > endRow)
-            endRow = sb->y + sb->dh;
-    }
-    firstRow &= ~((1 << dst->chroma_y_shift) - 1);
-    --endRow;
-    endRow |= (1 << dst->chroma_y_shift) - 1;
-    ++endRow;
+    if (!sub_bitmaps_bb(sbs, &x1, &y1, &x2, &y2))
+        return;
+    y1 &= ~((1 << dst->chroma_y_shift) - 1);
+    --y2;
+    y2 |= (1 << dst->chroma_y_shift) - 1;
+    ++y2;
 
-    if (firstRow < 0)
-        firstRow = 0;
-    if (endRow > dst->h)
-        endRow = dst->h;
-    if (firstRow >= endRow)
+    if (y1 < 0)
+        y1 = 0;
+    if (y2 > dst->h)
+        y2 = dst->h;
+    if (y1 >= y2)
         return; // nothing to do
 
-    // allocate temp image
-    mp_image_t *temp = alloc_mpi(dst->w, endRow - firstRow, format);
-
-    // convert to temp image
-    mp_image_swscale_rows(temp, 0, endRow - firstRow, 1, dst, firstRow, endRow - firstRow, 1, csp);
+    // convert to a temp image
+    mp_image_t *temp = alloc_mpi(dst->w, y2 - y1, format);
+    mp_image_swscale_rows(temp, 0, y2 - y1, 1, dst, y1, y2 - y1, 1, csp);
 
     for (i = 0; i < sbs->num_parts; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
@@ -159,7 +152,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struc
         int p;
         for(p = 0; p < 3; ++p)
             mp_image_blend_plane_with_alpha(
-                    (temp->planes[p] + (dst_y - firstRow) * temp->stride[p]) + dst_x * bytes,
+                    (temp->planes[p] + (dst_y - y1) * temp->stride[p]) + dst_x * bytes,
                     temp->stride[p],
                     sbi ? sbi->planes[p] + (dst_y - sb->y) * sbi->stride[p] + (dst_x - sb->x) * bytes : NULL,
                     sbi ? sbi->stride[p] : 0,
@@ -177,7 +170,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struc
     }
 
     // convert back
-    mp_image_swscale_rows(dst, firstRow, endRow - firstRow, 1, temp, 0, endRow - firstRow, 1, csp);
+    mp_image_swscale_rows(dst, y1, y2 - y1, 1, temp, 0, y2 - y1, 1, csp);
 
     // clean up
     free_mp_image(temp);

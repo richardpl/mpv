@@ -123,11 +123,22 @@ static bool clip_to_bounds(int *x, int *y, int *w, int *h, int bx, int by, int b
     return true;
 }
 
+static void expand_bbox_to_steps(int *x1, int *y1, int *x2, int *y2, int xstep, int ystep)
+{
+    *x1 -= (*x1 % xstep);
+    *y1 -= (*y1 % ystep);
+
+    *x2 += xstep - 1;
+    *y2 += ystep - 1;
+    *x2 -= (*x2 % xstep);
+    *y2 -= (*y2 % ystep);
+}
+
 void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
                             struct mp_csp_details *csp)
 {
     int i;
-    int x1, y1, x2, y2;
+    int x1, y1, x2, y2, xstep, ystep;
     int color_yuv[3];
     int color_a;
     float yuv2rgb[3][4];
@@ -155,21 +166,27 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
     // calculate bounding range
     if (!sub_bitmaps_bb(sbs, &x1, &y1, &x2, &y2))
         return;
-    y1 &= ~((1 << dst->chroma_y_shift) - 1);
-    --y2;
-    y2 |= (1 << dst->chroma_y_shift) - 1;
-    ++y2;
 
+    mp_image_get_supported_regionstep(&xstep, &ystep, dst);
+    expand_bbox_to_steps(&x1, &y1, &x2, &y2, xstep, ystep);
+
+    if (x1 < 0)
+        x1 = 0;
     if (y1 < 0)
         y1 = 0;
+    if (x2 > dst->w)
+        x2 = dst->w;
     if (y2 > dst->h)
         y2 = dst->h;
-    if (y1 >= y2)
+    if (x1 >= x2 || y1 >= y2)
         return;  // nothing to do
 
     // convert to a temp image
-    mp_image_t *temp = alloc_mpi(dst->w, y2 - y1, format);
-    mp_image_swscale_region(temp, 0, 0, temp->w, y2 - y1, 1, dst, 0, y1, dst->w, y2 - y1, 1, csp);
+    mp_image_t *temp = alloc_mpi(x2 - x1, y2 - y1, format);
+    mp_image_swscale_region(
+		    temp, 0, 0, x2 - x1, y2 - y1, 1,
+		    dst, x1, y1, x2 - x1, y2 - y1, 1,
+		    csp);
 
     for (i = 0; i < sbs->num_parts; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
@@ -177,8 +194,8 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
         mp_image_t *sba = NULL;
 
         // cut off areas outside the image
-        int dst_x = sb->x;
-        int dst_y = sb->y - y1; // relative to temp, please!
+        int dst_x = sb->x - x1; // coordinates are relative to the bbox
+        int dst_y = sb->y - y1; // coordinates are relative to the bbox
         int dst_w = sb->dw;
         int dst_h = sb->dh;
 	if (!clip_to_bounds(&dst_x, &dst_y, &dst_w, &dst_h, 0, 0, temp->w, temp->h))
@@ -196,7 +213,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
         for (p = 0; p < 3; ++p) {
             unsigned char *dst_p =
                 temp->planes[p] + dst_y * temp->stride[p] + dst_x * bytes;
-            int src_x = dst_x        - sb->x;
+            int src_x = (dst_x + x1) - sb->x;
             int src_y = (dst_y + y1) - sb->y;
             unsigned char *alpha_p =
                 sba->planes[0] + src_y * sba->stride[0] + src_x;
@@ -205,7 +222,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
                     sbi->planes[p] + src_y * sbi->stride[p] + src_x * bytes;
                 mp_blend_src_alpha(
                     dst_p, temp->stride[p],
-                    src_p, sbi ? sbi->stride[p] : 0,
+                    src_p, sbi->stride[p],
                     alpha_p, sba->stride[0], color_a,
                     dst_h, dst_w, bytes
                     );
@@ -226,7 +243,10 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
     }
 
     // convert back
-    mp_image_swscale_region(dst, 0, y1, dst->w, y2 - y1, 1, temp, 0, 0, temp->w, y2 - y1, 1, csp);
+    mp_image_swscale_region(dst,
+		    x1, y1, x2 - x1, y2 - y1, 1,
+		    temp, 0, 0, x2 - x1, y2 - y1, 1,
+		    csp);
 
     // clean up
     free_mp_image(temp);

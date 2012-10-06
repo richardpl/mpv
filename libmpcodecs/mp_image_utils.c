@@ -27,6 +27,39 @@
 #include "libmpcodecs/img_format.h"
 #include "libvo/csputils.h"
 
+void mp_image_get_supported_regionstep(int *sx, int *sy,
+                                       const struct mp_image *img)
+{
+    int p;
+
+    if (img->chroma_x_shift == 31)
+        *sx = 1;
+    else
+        *sx = (1 << img->chroma_y_shift);
+
+    if (img->chroma_y_shift == 31)
+        *sy = 1;
+    else
+        *sy = (1 << img->chroma_y_shift);
+
+    for (p = 0; p < img->num_planes; ++p) {
+        int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(img, p);
+        if (bits % 8 == 0) // bytes: all is good
+            continue;
+        if (*sx % 2)
+            *sx *= 2;
+        if (bits % 4 == 0) // halfbytes: need even number of them
+            continue;
+        if (*sx % 4)
+            *sx *= 2;
+        if (bits % 2 == 0) // quarterbytes: need 4k number of them
+            continue;
+        if (*sx % 8)
+            *sx *= 2;
+        // otherwise, we need an 8k number
+    }
+}
+
 void mp_image_swscale(struct mp_image *dst,
                       const struct mp_image *src,
                       struct mp_csp_details *csp)
@@ -48,43 +81,18 @@ void mp_image_swscale_region(struct mp_image *dst,
                              int sx, int sy, int sw, int sh, int srcRowStep,
                              struct mp_csp_details *csp)
 {
-    int p;
-    int src_chroma_y_shift =
-        src->chroma_y_shift == 31 ? 0 : src->chroma_y_shift;
-    int dst_chroma_y_shift =
-        dst->chroma_y_shift == 31 ? 0 : dst->chroma_y_shift;
-    int src_chroma_x_shift =
-        src->chroma_x_shift == 31 ? 0 : src->chroma_x_shift;
-    int dst_chroma_x_shift =
-        dst->chroma_x_shift == 31 ? 0 : dst->chroma_x_shift;
-    int dxmask =
-        ((1 << dst_chroma_x_shift) - 1);
-    int sxmask =
-        ((1 << src_chroma_x_shift) - 1);
-    int dymask =
-        ((1 << dst_chroma_y_shift) - 1);
-    int symask =
-        ((1 << src_chroma_y_shift) - 1);
+    int sxstep, systep, dxstep, dystep;
+    mp_image_get_supported_regionstep(&dxstep, &dystep, dst);
+    mp_image_get_supported_regionstep(&sxstep, &systep, src);
 
-    for (p = 0; p < dst->num_planes; ++p) {
-        int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, p);
-        if (bits < 8)
-            dxmask |= 8 / bits - 1;
-    }
-    for (p = 0; p < src->num_planes; ++p) {
-        int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, p);
-        if (bits < 8)
-            sxmask |= 8 / bits - 1;
-    }
-
-    assert((dx & dxmask) == 0);
-    assert((dy & dymask) == 0);
-    assert((sx & sxmask) == 0);
-    assert((sy & symask) == 0);
-    assert((dw & dxmask) == 0 || dx + dw == dst->w);
-    assert((dh & dymask) == 0 || dy + dh == dst->h);
-    assert((sw & sxmask) == 0 || sx + sw == src->w);
-    assert((sh & symask) == 0 || sy + sh == src->h);
+    assert((dx % dxstep) == 0);
+    assert((dy % dystep) == 0);
+    assert((sx % sxstep) == 0);
+    assert((sy % systep) == 0);
+    assert((dw % dxstep) == 0 || dx + dw == dst->w);
+    assert((dh % dystep) == 0 || dy + dh == dst->h);
+    assert((sw % sxstep) == 0 || sx + sw == src->w);
+    assert((sh % systep) == 0 || sy + sh == src->h);
 
     struct SwsContext *sws =
         sws_getContextFromCmdLine_hq(sw, sh, src->imgfmt, dw, dh,
@@ -94,16 +102,16 @@ void mp_image_swscale_region(struct mp_image *dst,
         mycsp = *csp;
     mp_sws_set_colorspace(sws, &mycsp);
     const uint8_t *const src_planes[4] = {
-        src->planes[0] + sy * src->stride[0] + sx * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 0),
-        src->planes[1] + (sy >> src_chroma_y_shift) * src->stride[1] + (sx >> src_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 1),
-        src->planes[2] + (sy >> src_chroma_y_shift) * src->stride[2] + (sx >> src_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 2),
-        src->planes[3] + (sy >> src_chroma_y_shift) * src->stride[3] + (sx >> src_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 3)
+        src->planes[0] + sy * src->stride[0] + sx * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 0) / 8,
+        src->planes[1] + (sy >> src->chroma_y_shift) * src->stride[1] + (sx >> src->chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 1) / 8,
+        src->planes[2] + (sy >> src->chroma_y_shift) * src->stride[2] + (sx >> src->chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 2) / 8,
+        src->planes[3] + (sy >> src->chroma_y_shift) * src->stride[3] + (sx >> src->chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 3) / 8
     };
     uint8_t *const dst_planes[4] = {
-        dst->planes[0] + dy * dst->stride[0] + dx * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 0),
-        dst->planes[1] + (dy >> dst_chroma_y_shift) * dst->stride[1] + (dx >> dst_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 1),
-        dst->planes[2] + (dy >> dst_chroma_y_shift) * dst->stride[2] + (dx >> dst_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 2),
-        dst->planes[3] + (dy >> dst_chroma_y_shift) * dst->stride[3] + (dx >> dst_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 3)
+        dst->planes[0] + dy * dst->stride[0] + dx * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 0) / 8,
+        dst->planes[1] + (dy >> dst->chroma_y_shift) * dst->stride[1] + (dx >> dst->chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 1) / 8,
+        dst->planes[2] + (dy >> dst->chroma_y_shift) * dst->stride[2] + (dx >> dst->chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 2) / 8,
+        dst->planes[3] + (dy >> dst->chroma_y_shift) * dst->stride[3] + (dx >> dst->chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 3) / 8
     };
     const int src_stride[4] = {
         src->stride[0] * srcRowStep,

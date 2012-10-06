@@ -23,6 +23,8 @@ struct mp_image;
 struct mp_csp_details;
 
 // sws stuff
+void mp_image_get_supported_regionstep(int *sx, int *sy,
+                                       const struct mp_image *img);
 void mp_image_swscale(struct mp_image *dst,
                       const struct mp_image *src,
                       struct mp_csp_details *csp);

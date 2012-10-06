@@ -18,49 +18,92 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <assert.h>
 
 #include "libmpcodecs/mp_image_utils.h"
 
 #include "libmpcodecs/mp_image.h"
 #include "libmpcodecs/sws_utils.h"
+#include "libmpcodecs/img_format.h"
 #include "libvo/csputils.h"
 
-void mp_image_swscale_rows(struct mp_image *dst, int dstRow, int dstRows,
-                           int dstRowStep, const struct mp_image *src,
-                           int srcRow, int srcRows,
-                           int srcRowStep,
-                           struct mp_csp_details *csp)
+void mp_image_swscale(struct mp_image *dst,
+                      const struct mp_image *src,
+                      struct mp_csp_details *csp)
 {
-    int src_chroma_y_shift = src->chroma_y_shift ==
-                             31 ? 0 : src->chroma_y_shift;
-    int dst_chroma_y_shift = dst->chroma_y_shift ==
-                             31 ? 0 : dst->chroma_y_shift;
-    int mask = ((1 << dst_chroma_y_shift) - 1) | ((1 << src_chroma_y_shift) - 1);
-    if ((dstRow | dstRows | srcRow | srcRows) & mask)
-        mp_msg(
-            MSGT_VO, MSGL_ERR,
-            "region_to_region: chroma y shift: cannot copy src row %d length %d to dst row %d length %d without problems, the output image may be corrupted (%d, %d, %d)\n",
-            srcRow, srcRows, dstRow, dstRows, mask, dst->chroma_y_shift,
-            src->chroma_y_shift);
     struct SwsContext *sws =
-        sws_getContextFromCmdLine_hq(src->w, srcRows, src->imgfmt, dst->w,
-                                     dstRows,
+        sws_getContextFromCmdLine_hq(src->w, src->h, src->imgfmt, dst->w, dst->h,
+                                     dst->imgfmt);
+    struct mp_csp_details mycsp = MP_CSP_DETAILS_DEFAULTS;
+    if (csp)
+        mycsp = *csp;
+    mp_sws_set_colorspace(sws, &mycsp);
+    sws_scale(sws, (const unsigned char *const *) src->planes, src->stride, 0, src->h, dst->planes, dst->stride);
+    sws_freeContext(sws);
+}
+
+void mp_image_swscale_region(struct mp_image *dst,
+                             int dx, int dy, int dw, int dh, int dstRowStep,
+                             const struct mp_image *src,
+                             int sx, int sy, int sw, int sh, int srcRowStep,
+                             struct mp_csp_details *csp)
+{
+    int p;
+    int src_chroma_y_shift =
+        src->chroma_y_shift == 31 ? 0 : src->chroma_y_shift;
+    int dst_chroma_y_shift =
+        dst->chroma_y_shift == 31 ? 0 : dst->chroma_y_shift;
+    int src_chroma_x_shift =
+        src->chroma_x_shift == 31 ? 0 : src->chroma_x_shift;
+    int dst_chroma_x_shift =
+        dst->chroma_x_shift == 31 ? 0 : dst->chroma_x_shift;
+    int dxmask =
+        ((1 << dst_chroma_x_shift) - 1);
+    int sxmask =
+        ((1 << src_chroma_x_shift) - 1);
+    int dymask =
+        ((1 << dst_chroma_y_shift) - 1);
+    int symask =
+        ((1 << src_chroma_y_shift) - 1);
+
+    for (p = 0; p < dst->num_planes; ++p) {
+        int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, p);
+        if (bits < 8)
+            dxmask |= 8 / bits - 1;
+    }
+    for (p = 0; p < src->num_planes; ++p) {
+        int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, p);
+        if (bits < 8)
+            sxmask |= 8 / bits - 1;
+    }
+
+    assert((dx & dxmask) == 0);
+    assert((dy & dymask) == 0);
+    assert((sx & sxmask) == 0);
+    assert((sy & symask) == 0);
+    assert((dw & dxmask) == 0 || dx + dw == dst->w);
+    assert((dh & dymask) == 0 || dy + dh == dst->h);
+    assert((sw & sxmask) == 0 || sx + sw == src->w);
+    assert((sh & symask) == 0 || sy + sh == src->h);
+
+    struct SwsContext *sws =
+        sws_getContextFromCmdLine_hq(sw, sh, src->imgfmt, dw, dh,
                                      dst->imgfmt);
     struct mp_csp_details mycsp = MP_CSP_DETAILS_DEFAULTS;
     if (csp)
         mycsp = *csp;
     mp_sws_set_colorspace(sws, &mycsp);
     const uint8_t *const src_planes[4] = {
-        src->planes[0] + srcRow * src->stride[0],
-        src->planes[1] + (srcRow >> src_chroma_y_shift) * src->stride[1],
-        src->planes[2] + (srcRow >> src_chroma_y_shift) * src->stride[2],
-        src->planes[3] + (srcRow >> src_chroma_y_shift) * src->stride[3]
+        src->planes[0] + sy * src->stride[0] + sx * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 0),
+        src->planes[1] + (sy >> src_chroma_y_shift) * src->stride[1] + (sx >> src_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 1),
+        src->planes[2] + (sy >> src_chroma_y_shift) * src->stride[2] + (sx >> src_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 2),
+        src->planes[3] + (sy >> src_chroma_y_shift) * src->stride[3] + (sx >> src_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(src, 3)
     };
     uint8_t *const dst_planes[4] = {
-        dst->planes[0] + dstRow * dst->stride[0],
-        dst->planes[1] + (dstRow >> dst_chroma_y_shift) * dst->stride[1],
-        dst->planes[2] + (dstRow >> dst_chroma_y_shift) * dst->stride[2],
-        dst->planes[3] + (dstRow >> dst_chroma_y_shift) * dst->stride[3]
+        dst->planes[0] + dy * dst->stride[0] + dx * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 0),
+        dst->planes[1] + (dy >> dst_chroma_y_shift) * dst->stride[1] + (dx >> dst_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 1),
+        dst->planes[2] + (dy >> dst_chroma_y_shift) * dst->stride[2] + (dx >> dst_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 2),
+        dst->planes[3] + (dy >> dst_chroma_y_shift) * dst->stride[3] + (dx >> dst_chroma_x_shift) * MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(dst, 3)
     };
     const int src_stride[4] = {
         src->stride[0] * srcRowStep,
@@ -74,17 +117,17 @@ void mp_image_swscale_rows(struct mp_image *dst, int dstRow, int dstRows,
         dst->stride[2] * dstRowStep,
         dst->stride[3] * dstRowStep
     };
-    sws_scale(sws, src_planes, src_stride, 0, srcRows, dst_planes, dst_stride);
+    sws_scale(sws, src_planes, src_stride, 0, sh, dst_planes, dst_stride);
     sws_freeContext(sws);
 }
 
-static void mp_image_blend_plane_const16_with_alpha(uint8_t *dst,
-                                                    ssize_t dstRowStride,
-                                                    uint8_t srcp,
-                                                    const uint8_t *srca,
-                                                    ssize_t srcaRowStride,
-                                                    uint8_t srcamul, int rows,
-                                                    int cols)
+static void mp_blend_const16_alpha(uint8_t *dst,
+                                   ssize_t dstRowStride,
+                                   uint8_t srcp,
+                                   const uint8_t *srca,
+                                   ssize_t srcaRowStride,
+                                   uint8_t srcamul, int rows,
+                                   int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
@@ -102,14 +145,14 @@ static void mp_image_blend_plane_const16_with_alpha(uint8_t *dst,
     }
 }
 
-static void mp_image_blend_plane_src16_with_alpha(uint8_t *dst,
-                                                  ssize_t dstRowStride,
-                                                  const uint8_t *src,
-                                                  ssize_t srcRowStride,
-                                                  const uint8_t *srca,
-                                                  ssize_t srcaRowStride,
-                                                  uint8_t srcamul, int rows,
-                                                  int cols)
+static void mp_blend_src16_alpha(uint8_t *dst,
+                                 ssize_t dstRowStride,
+                                 const uint8_t *src,
+                                 ssize_t srcRowStride,
+                                 const uint8_t *srca,
+                                 ssize_t srcaRowStride,
+                                 uint8_t srcamul, int rows,
+                                 int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
@@ -129,13 +172,13 @@ static void mp_image_blend_plane_src16_with_alpha(uint8_t *dst,
     }
 }
 
-static void mp_image_blend_plane_const8_with_alpha(uint8_t *dst,
-                                                   ssize_t dstRowStride,
-                                                   uint8_t srcp,
-                                                   const uint8_t *srca,
-                                                   ssize_t srcaRowStride,
-                                                   uint8_t srcamul, int rows,
-                                                   int cols)
+static void mp_blend_const8_alpha(uint8_t *dst,
+                                  ssize_t dstRowStride,
+                                  uint8_t srcp,
+                                  const uint8_t *srca,
+                                  ssize_t srcaRowStride,
+                                  uint8_t srcamul, int rows,
+                                  int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
@@ -152,14 +195,14 @@ static void mp_image_blend_plane_const8_with_alpha(uint8_t *dst,
     }
 }
 
-static void mp_image_blend_plane_src8_with_alpha(uint8_t *dst,
-                                                 ssize_t dstRowStride,
-                                                 const uint8_t *src,
-                                                 ssize_t srcRowStride,
-                                                 const uint8_t *srca,
-                                                 ssize_t srcaRowStride,
-                                                 uint8_t srcamul, int rows,
-                                                 int cols)
+static void mp_blend_src8_alpha(uint8_t *dst,
+                                ssize_t dstRowStride,
+                                const uint8_t *src,
+                                ssize_t srcRowStride,
+                                const uint8_t *srca,
+                                ssize_t srcaRowStride,
+                                uint8_t srcamul, int rows,
+                                int cols)
 {
     int i, j;
     for (i = 0; i < rows; ++i) {
@@ -179,38 +222,38 @@ static void mp_image_blend_plane_src8_with_alpha(uint8_t *dst,
     }
 }
 
-void mp_image_blend_plane_src_with_alpha(uint8_t *dst, ssize_t dstRowStride,
-                                         const uint8_t *src, ssize_t srcRowStride,
-                                         const uint8_t *srca, ssize_t srcaRowStride,
-                                         uint8_t srcamul,
-                                         int rows, int cols, int bytes)
+void mp_blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
+                        const uint8_t *src, ssize_t srcRowStride,
+                        const uint8_t *srca, ssize_t srcaRowStride,
+                        uint8_t srcamul,
+                        int rows, int cols, int bytes)
 {
     if (bytes == 2) {
-        mp_image_blend_plane_src16_with_alpha(dst, dstRowStride, src,
+        mp_blend_src16_alpha(dst, dstRowStride, src,
                                               srcRowStride, srca,
                                               srcaRowStride, srcamul, rows,
                                               cols);
     } else if (bytes == 1) {
-        mp_image_blend_plane_src8_with_alpha(dst, dstRowStride, src,
+        mp_blend_src8_alpha(dst, dstRowStride, src,
                                              srcRowStride, srca,
                                              srcaRowStride, srcamul, rows,
                                              cols);
     }
 }
 
-void mp_image_blend_plane_const_with_alpha(uint8_t *dst, ssize_t dstRowStride,
-                                           uint8_t srcp,
-                                           const uint8_t *srca, ssize_t srcaRowStride,
-                                           uint8_t srcamul,
-                                           int rows, int cols, int bytes)
+void mp_blend_const_alpha(uint8_t *dst, ssize_t dstRowStride,
+                          uint8_t srcp,
+                          const uint8_t *srca, ssize_t srcaRowStride,
+                          uint8_t srcamul,
+                          int rows, int cols, int bytes)
 {
     if (bytes == 2) {
-        mp_image_blend_plane_const16_with_alpha(dst, dstRowStride, srcp,
+        mp_blend_const16_alpha(dst, dstRowStride, srcp,
                 srca, srcaRowStride,
                 srcamul, rows,
                 cols);
     } else if (bytes == 1) {
-        mp_image_blend_plane_const8_with_alpha(dst, dstRowStride, srcp,
+        mp_blend_const8_alpha(dst, dstRowStride, srcp,
                                                srca, srcaRowStride, srcamul,
                                                rows,
                                                cols);

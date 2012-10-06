@@ -41,7 +41,7 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         mp_image_setfmt(sbisrc, IMGFMT_BGRA);
         sbisrc->planes[0] = sb->bitmap;
         *sbi = alloc_mpi(sb->dw, sb->dh, format);
-        mp_image_swscale_rows(*sbi, 0, sb->dh, 1, sbisrc, 0, sb->h, 1, csp);
+        mp_image_swscale(*sbi, sbisrc, csp);
         free_mp_image(sbisrc);
 
         mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
@@ -52,7 +52,7 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
                     ((unsigned char *) sb->bitmap)[(x + y *
                                                     sb->stride) * 4 + 3];
         *sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
-        mp_image_swscale_rows(*sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, csp);
+        mp_image_swscale(*sba, sbasrc, csp);
         free_mp_image(sbasrc);
         color_yuv[0] = 255;
         color_yuv[1] = 128;
@@ -169,7 +169,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
 
     // convert to a temp image
     mp_image_t *temp = alloc_mpi(dst->w, y2 - y1, format);
-    mp_image_swscale_rows(temp, 0, y2 - y1, 1, dst, y1, y2 - y1, 1, csp);
+    mp_image_swscale_region(temp, 0, 0, temp->w, y2 - y1, 1, dst, 0, y1, dst->w, y2 - y1, 1, csp);
 
     for (i = 0; i < sbs->num_parts; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
@@ -191,7 +191,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
             continue;
         }
 
-        // call mp_image_blend_plane_with_alpha 3 times
+        // call mp_blend_alpha 3 times
         int p;
         for (p = 0; p < 3; ++p) {
             unsigned char *dst_p =
@@ -203,14 +203,14 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
 	    if (sbi) {
                 unsigned char *src_p =
                     sbi->planes[p] + src_y * sbi->stride[p] + src_x * bytes;
-                mp_image_blend_plane_src_with_alpha(
+                mp_blend_src_alpha(
                     dst_p, temp->stride[p],
                     src_p, sbi ? sbi->stride[p] : 0,
                     alpha_p, sba->stride[0], color_a,
                     dst_h, dst_w, bytes
                     );
             } else {
-                mp_image_blend_plane_const_with_alpha(
+                mp_blend_const_alpha(
                     dst_p, temp->stride[p],
                     color_yuv[p],
                     alpha_p, sba->stride[0], color_a,
@@ -226,7 +226,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
     }
 
     // convert back
-    mp_image_swscale_rows(dst, y1, y2 - y1, 1, temp, 0, y2 - y1, 1, csp);
+    mp_image_swscale_region(dst, 0, y1, dst->w, y2 - y1, 1, temp, 0, 0, temp->w, y2 - y1, 1, csp);
 
     // clean up
     free_mp_image(temp);

@@ -23,22 +23,26 @@ struct mp_image;
 struct mp_csp_details;
 
 // sws stuff
-void mp_image_swscale_rows(struct mp_image *dst, int dstRow, int dstRows,
-                           int dstRowStep, const struct mp_image *src,
-                           int srcRow, int srcRows,
-                           int srcRowStep,
-                           struct mp_csp_details *csp);
+void mp_image_swscale(struct mp_image *dst,
+                      const struct mp_image *src,
+                      struct mp_csp_details *csp);
+void mp_image_swscale_region(struct mp_image *dst,
+                             int dx, int dy, int dw, int dh, int dstRowStep,
+                             const struct mp_image *src,
+                             int sx, int sy, int sw, int sh, int srcRowStep,
+                             struct mp_csp_details *csp);
 
 // alpha blending (this works on single planes!)
-void mp_image_blend_plane_src_with_alpha(uint8_t *dst, ssize_t dstRowStride,
-                                         const uint8_t *src, ssize_t srcRowStride,
-                                         const uint8_t *srca, ssize_t srcaRowStride,
-                                         uint8_t srcamul,
-                                         int rows, int cols, int bytes);
-void mp_image_blend_plane_const_with_alpha(uint8_t *dst, ssize_t dstRowStride,
-                                           uint8_t srcp,
-                                           const uint8_t *srca, ssize_t srcaRowStride,
-                                           uint8_t srcamul,
-                                           int rows, int cols, int bytes);
+// note: src is assumed to be premultiplied
+void mp_blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
+                        const uint8_t *src, ssize_t srcRowStride,
+                        const uint8_t *srca, ssize_t srcaRowStride,
+                        uint8_t srcamul,
+                        int rows, int cols, int bytes);
+void mp_blend_const_alpha(uint8_t *dst, ssize_t dstRowStride,
+                        uint8_t srcp,
+                        const uint8_t *srca, ssize_t srcaRowStride,
+                        uint8_t srcamul,
+                        int rows, int cols, int bytes);
 
 #endif /* MPLAYER_MP_IMAGE_UTILS_H */

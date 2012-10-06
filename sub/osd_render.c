@@ -109,9 +109,11 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
     float yuv2rgb[3][4];
     float rgb2yuv[3][4];
     struct mp_csp_params cspar = {
-        .colorspace = *csp, .brightness = 0, .contrast = 1, .hue = 0,
-        .saturation = 1, .rgamma = 1, .ggamma = 1, .bgamma = 1, .texture_bits =
-            8, .input_bits = 8
+        .colorspace = *csp,
+        .brightness = 0, .contrast = 1,
+        .hue = 0, .saturation = 1,
+        .rgamma = 1, .ggamma = 1, .bgamma = 1,
+        .texture_bits = 8, .input_bits = 8
     };
 
 #if 1

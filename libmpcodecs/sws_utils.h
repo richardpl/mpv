@@ -47,17 +47,4 @@ void mp_image_swscale_region(struct mp_image *dst,
                              int sx, int sy, int sw, int sh, int srcRowStep,
                              struct mp_csp_details *csp);
 
-// alpha blending (this works on single planes!)
-// note: src is assumed to be premultiplied
-void mp_blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
-                        const uint8_t *src, ssize_t srcRowStride,
-                        const uint8_t *srca, ssize_t srcaRowStride,
-                        uint8_t srcamul,
-                        int rows, int cols, int bytes);
-void mp_blend_const_alpha(uint8_t *dst, ssize_t dstRowStride,
-                          uint8_t srcp,
-                          const uint8_t *srca, ssize_t srcaRowStride,
-                          uint8_t srcamul,
-                          int rows, int cols, int bytes);
-
 #endif /* MP_SWS_UTILS_H */

@@ -40,7 +40,8 @@ static void blend_const16_alpha(uint8_t *dst,
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
             uint16_t dstp = dstr[j];
-            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            uint32_t srcap = srcar[j];
+                // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
             uint16_t outp =
                 (srcp * srcap * srcamul + dstp *
@@ -67,11 +68,13 @@ static void blend_src16_alpha(uint8_t *dst,
         for (j = 0; j < cols; ++j) {
             uint16_t dstp = dstr[j];
             uint16_t srcp = srcr[j];
-            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            uint32_t srcap = srcar[j];
+                // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
             uint16_t outp =
                 (srcp * srcamul +
-                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025;                              // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025;
+                // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
     }
@@ -91,7 +94,8 @@ static void blend_const8_alpha(uint8_t *dst,
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
             uint8_t dstp = dstr[j];
-            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            uint32_t srcap = srcar[j];
+                // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
             uint8_t outp =
                 (srcp * srcap + dstp * (65025 - srcap) + 32512) / 65025;
@@ -117,11 +121,13 @@ static void blend_src8_alpha(uint8_t *dst,
         for (j = 0; j < cols; ++j) {
             uint8_t dstp = dstr[j];
             uint8_t srcp = srcr[j];
-            uint32_t srcap = srcar[j]; // 32bit to force the math ops to operate on 32 bit
+            uint32_t srcap = srcar[j];
+                // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
             uint8_t outp =
                 (srcp * srcamul +
-                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025;                             // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
+                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025; 
+                // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
     }
@@ -174,8 +180,10 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
     int x, y;
     *sbi = NULL;
     *sba = NULL;
-    if (format == SUBBITMAP_RGBA && sb->w >= 8) { // >= 8 because of libswscale madness
-        // swscale the bitmap from w*h to dw*dh, changing BGRA8 into YUV444P16 and make a scaled copy of A8
+    if (format == SUBBITMAP_RGBA && sb->w >= 8) {
+        // >= 8 because of libswscale madness
+        // swscale the bitmap from w*h to dw*dh, changing BGRA8 into YUV444P16
+        // and make a scaled copy of A8
         mp_image_t *sbisrc = new_mp_image(sb->w, sb->h);
         mp_image_setfmt(sbisrc, IMGFMT_BGRA);
         sbisrc->planes[0] = sb->bitmap;
@@ -219,7 +227,8 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
             rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255,
                                       2) * (bytes == 2 ? 257 : 1));
         *color_a = 255 - a;
-        // NOTE: these overflows can actually happen (when subtitles use color 0,0,0 while output levels only allows 16,16,16 upwards...)
+        // NOTE: these overflows can actually happen (when subtitles use color
+        // 0,0,0 while output levels only allows 16,16,16 upwards...)
         if (color_yuv[0] < 0)
             color_yuv[0] = 0;
         if (color_yuv[1] < 0)

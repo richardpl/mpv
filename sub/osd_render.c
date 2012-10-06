@@ -26,7 +26,10 @@
 #include "libmpcodecs/img_format.h"
 #include "libvo/csputils.h"
 
-static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv, int *color_a, struct mp_image **sba, struct sub_bitmap *sb, int format)
+static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
+                                    int *color_a, struct mp_image **sba,
+                                    struct sub_bitmap *sb,
+                                    int format)
 {
     *sbi = NULL;
     *sba = NULL;
@@ -42,7 +45,10 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv, int *
         mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
         for (y = 0; y < sb->h; ++y)
             for (x = 0; x < sb->w; ++x)
-                sbasrc->planes[0][x + y * sbasrc->stride[0]] = ((unsigned char *) sb->bitmap)[(x + y * sb->stride) * 4 + 3];
+                sbasrc->planes[0][x + y *
+                                  sbasrc->stride[0]] =
+                    ((unsigned char *) sb->bitmap)[(x + y *
+                                                    sb->stride) * 4 + 3];
         *sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
         mp_image_swscale_rows(*sba, 0, sb->dh, 1, sbasrc, 0, sb->h, 1, csp);
         free_mp_image(sbasrc);
@@ -51,7 +57,8 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv, int *
         color_yuv[2] = 128;
         *color_a = 255;
         return true;
-    } else if (format == SUBBITMAP_LIBASS && sb->w == sb->dw && sb->h == sb->dh) {
+    } else if (format == SUBBITMAP_LIBASS && sb->w == sb->dw && sb->h ==
+               sb->dh) {
         // swscale alpha only
         *sba = new_mp_image(sb->w, sb->h);
         mp_image_setfmt(*sba, IMGFMT_Y8);
@@ -61,32 +68,39 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv, int *
         int g = (sb->libass.color >> 16) & 0xFF;
         int b = (sb->libass.color >> 8) & 0xFF;
         int a = sb->libass.color & 0xFF;
-        color_yuv[0] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0) * (bytes == 2 ? 257 : 1));
-        color_yuv[1] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1) * (bytes == 2 ? 257 : 1));
-        color_yuv[2] = rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2) * (bytes == 2 ? 257 : 1));
+        color_yuv[0] =
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255,
+                                      0) * (bytes == 2 ? 257 : 1));
+        color_yuv[1] =
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255,
+                                      1) * (bytes == 2 ? 257 : 1));
+        color_yuv[2] =
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255,
+                                      2) * (bytes == 2 ? 257 : 1));
         *color_a = 255 - a;
         // NOTE: these overflows can actually happen (when subtitles use color 0,0,0 while output levels only allows 16,16,16 upwards...)
-        if(color_yuv[0] < 0)
+        if (color_yuv[0] < 0)
             color_yuv[0] = 0;
-        if(color_yuv[1] < 0)
+        if (color_yuv[1] < 0)
             color_yuv[1] = 0;
-        if(color_yuv[2] < 0)
+        if (color_yuv[2] < 0)
             color_yuv[2] = 0;
-        if(*color_a < 0)
+        if (*color_a < 0)
             *color_a = 0;
-        if(color_yuv[0] > (bytes == 2 ? 65535 : 255))
+        if (color_yuv[0] > (bytes == 2 ? 65535 : 255))
             color_yuv[0] = (bytes == 2 ? 65535 : 255);
-        if(color_yuv[1] > (bytes == 2 ? 65535 : 255))
+        if (color_yuv[1] > (bytes == 2 ? 65535 : 255))
             color_yuv[1] = (bytes == 2 ? 65535 : 255);
-        if(color_yuv[2] > (bytes == 2 ? 65535 : 255))
+        if (color_yuv[2] > (bytes == 2 ? 65535 : 255))
             color_yuv[2] = (bytes == 2 ? 65535 : 255);
-        if(*color_a > 255)
+        if (*color_a > 255)
             *color_a = 255;
         return true;
     }
 }
 
-void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struct mp_csp_details *csp)
+void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs,
+                            struct mp_csp_details *csp)
 {
     int i, x, y;
     int x1, y1, x2, y2;
@@ -94,7 +108,11 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struc
     int color_a;
     float yuv2rgb[3][4];
     float rgb2yuv[3][4];
-    struct mp_csp_params cspar = { .colorspace = *csp, .brightness = 0, .contrast = 1, .hue = 0, .saturation = 1, .rgamma = 1, .ggamma = 1, .bgamma = 1, .texture_bits = 8, .input_bits = 8 };
+    struct mp_csp_params cspar = {
+        .colorspace = *csp, .brightness = 0, .contrast = 1, .hue = 0,
+        .saturation = 1, .rgamma = 1, .ggamma = 1, .bgamma = 1, .texture_bits =
+            8, .input_bits = 8
+    };
 
 #if 1
     int format = IMGFMT_444P16;
@@ -121,7 +139,7 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struc
     if (y2 > dst->h)
         y2 = dst->h;
     if (y1 >= y2)
-        return; // nothing to do
+        return;  // nothing to do
 
     // convert to a temp image
     mp_image_t *temp = alloc_mpi(dst->w, y2 - y1, format);
@@ -145,41 +163,45 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struc
             dst_h += dst_y;
             dst_y = 0;
         }
-        if (dst_x + dst_w > dst->w) {
+        if (dst_x + dst_w > dst->w)
             dst_w = dst->w - dst_x;
-        }
-        if (dst_y + dst_h > dst->h) {
+        if (dst_y + dst_h > dst->h)
             dst_h = dst->h - dst_y;
-        }
 
         // return if nothing left
         if (dst_w <= 0 || dst_h <= 0)
             continue;
 
-        if (!sub_bitmap_to_mp_images(&sbi, color_yuv, &color_a, &sba, sb, sbs->format)) {
-            mp_msg(MSGT_VO, MSGL_ERR, "render_sub_bitmap: invalid sub bitmap type\n");
+        if (!sub_bitmap_to_mp_images(&sbi, color_yuv, &color_a, &sba, sb,
+                                     sbs->format)) {
+            mp_msg(MSGT_VO, MSGL_ERR,
+                   "render_sub_bitmap: invalid sub bitmap type\n");
             continue;
         }
 
         // call mp_image_blend_plane_with_alpha 3 times
         int p;
-        for(p = 0; p < 3; ++p)
+        for (p = 0; p < 3; ++p)
             mp_image_blend_plane_with_alpha(
-                    (temp->planes[p] + (dst_y - y1) * temp->stride[p]) + dst_x * bytes,
-                    temp->stride[p],
-                    sbi ? sbi->planes[p] + (dst_y - sb->y) * sbi->stride[p] + (dst_x - sb->x) * bytes : NULL,
-                    sbi ? sbi->stride[p] : 0,
-                    color_yuv[p],
-                    sba->planes[0] + (dst_y - sb->y) * sba->stride[0] + (dst_x - sb->x),
-                    sba->stride[0],
-                    color_a,
-                    dst_h, dst_w, bytes
-                    );
+                (temp->planes[p] +
+                 (dst_y - y1) * temp->stride[p]) + dst_x * bytes,
+                temp->stride[p],
+                sbi ? sbi->planes[p] +
+                (dst_y -
+                 sb->y) * sbi->stride[p] + (dst_x - sb->x) * bytes : NULL,
+                sbi ? sbi->stride[p] : 0,
+                color_yuv[p],
+                sba->planes[0] +
+                (dst_y - sb->y) * sba->stride[0] + (dst_x - sb->x),
+                sba->stride[0],
+                color_a,
+                dst_h, dst_w, bytes
+                );
 
         if (sbi)
-            free_mp_image (sbi);
+            free_mp_image(sbi);
         if (sba)
-            free_mp_image (sba);
+            free_mp_image(sba);
     }
 
     // convert back
@@ -188,4 +210,3 @@ void osd_render_to_mp_image(struct mp_image *dst, struct sub_bitmaps *sbs, struc
     // clean up
     free_mp_image(temp);
 }
-

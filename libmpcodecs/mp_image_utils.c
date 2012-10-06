@@ -36,7 +36,7 @@ void mp_image_get_supported_regionstep(int *sx, int *sy,
     if (img->chroma_x_shift == 31)
         *sx = 1;
     else
-        *sx = (1 << img->chroma_y_shift);
+        *sx = (1 << img->chroma_x_shift);
 
     if (img->chroma_y_shift == 31)
         *sy = 1;

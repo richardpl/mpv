@@ -187,19 +187,17 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         mp_image_t *sbisrc = new_mp_image(sb->w, sb->h);
         mp_image_setfmt(sbisrc, IMGFMT_BGRA);
         sbisrc->planes[0] = sb->bitmap;
-        *sbi = alloc_mpi(sb->dw, sb->dh, format);
+        sbisrc->stride[0] = sb->stride;
+        *sbi = alloc_mpi(sb->dw, sb->dh,
+                         bytes == 2 ? IMGFMT_444P16 : IMGFMT_444P);
         mp_image_swscale(*sbi, sbisrc, csp);
         free_mp_image(sbisrc);
 
         mp_image_t *sbasrc = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
         for (y = 0; y < sb->h; ++y)
             for (x = 0; x < sb->w; ++x)
-                sbasrc->planes[0][
-                        x + y * sbasrc->stride[0]
-                    ] =
-                    ((unsigned char *) sb->bitmap)[
-                        (x + y * sb->stride) * 4 + 3
-                    ];
+                sbasrc->planes[0][x + y * sbasrc->stride[0]]
+                    = ((uint8_t *) sb->bitmap)[x * 4 + y * sb->stride + 3];
         *sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
         mp_image_swscale(*sba, sbasrc, csp);
         free_mp_image(sbasrc);

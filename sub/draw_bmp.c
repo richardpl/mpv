@@ -255,7 +255,9 @@ static void mp_image_crop(struct mp_image *img, int x, int y, int w, int h)
     int p;
     for (p = 0; p < img->num_planes; ++p) {
         int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(img, p);
-        img->planes[p] += y * img->stride[p] + (x * bits) / 8;
+        img->planes[p] +=
+            (y >> (p ? img->chroma_y_shift : 0)) * img->stride[p] +
+            ((x >> (p ? img->chroma_x_shift : 0)) * bits) / 8;
     }
     img->w = w;
     img->h = h;

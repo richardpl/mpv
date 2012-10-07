@@ -57,7 +57,7 @@ static void blend_src16_alpha(uint8_t *dst,
                               ssize_t srcRowStride,
                               const uint8_t *srca,
                               ssize_t srcaRowStride,
-                              uint8_t srcamul, int rows,
+                              int rows,
                               int cols)
 {
     int i, j;
@@ -70,10 +70,8 @@ static void blend_src16_alpha(uint8_t *dst,
             uint16_t srcp = srcr[j];
             uint32_t srcap = srcar[j];
                 // 32bit to force the math ops to operate on 32 bit
-            srcap *= srcamul; // now 0..65025
             uint16_t outp =
-                (srcp * srcamul +
-                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025;
+                srcp + (dstp * (255 - srcap) + 127) / 255;
                 // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
@@ -110,7 +108,7 @@ static void blend_src8_alpha(uint8_t *dst,
                              ssize_t srcRowStride,
                              const uint8_t *srca,
                              ssize_t srcaRowStride,
-                             uint8_t srcamul, int rows,
+                             int rows,
                              int cols)
 {
     int i, j;
@@ -121,12 +119,10 @@ static void blend_src8_alpha(uint8_t *dst,
         for (j = 0; j < cols; ++j) {
             uint8_t dstp = dstr[j];
             uint8_t srcp = srcr[j];
-            uint32_t srcap = srcar[j];
-                // 32bit to force the math ops to operate on 32 bit
-            srcap *= srcamul; // now 0..65025
+            uint16_t srcap = srcar[j];
+                // 16bit to force the math ops to operate on 16 bit
             uint8_t outp =
-                (srcp * srcamul +
-                 127) / 255 + (dstp * (65025 - srcap) + 32512) / 65025; 
+                srcp + (dstp * (255 - srcap) + 127) / 255; 
                 // premultiplied alpha GL_ONE GL_ONE_MINUS_SRC_ALPHA
             dstr[j] = outp;
         }
@@ -136,19 +132,16 @@ static void blend_src8_alpha(uint8_t *dst,
 static void blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
                             const uint8_t *src, ssize_t srcRowStride,
                             const uint8_t *srca, ssize_t srcaRowStride,
-                            uint8_t srcamul,
                             int rows, int cols, int bytes)
 {
     if (bytes == 2) {
         blend_src16_alpha(dst, dstRowStride, src,
                           srcRowStride, srca,
-                          srcaRowStride, srcamul, rows,
-                          cols);
+                          srcaRowStride, rows, cols);
     } else if (bytes == 1) {
         blend_src8_alpha(dst, dstRowStride, src,
                          srcRowStride, srca,
-                         srcaRowStride, srcamul, rows,
-                         cols);
+                         srcaRowStride, rows, cols);
     }
 }
 
@@ -416,7 +409,7 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
                 blend_src_alpha(
                     dst_p, temp->stride[p],
                     src_p, sbi->stride[p],
-                    alpha_p, sba->stride[0], color_a,
+                    alpha_p, sba->stride[0],
                     dst_h, dst_w, bytes
                     );
             } else {

@@ -210,14 +210,11 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         int b = (sb->libass.color >> 8) & 0xFF;
         int a = sb->libass.color & 0xFF;
         color_yuv[0] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0)
-                    * (bytes == 2 ? 257 : 1));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0));
         color_yuv[1] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1)
-                    * (bytes == 2 ? 257 : 1));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1));
         color_yuv[2] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2)
-                    * (bytes == 2 ? 257 : 1));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2));
         *color_a = 255 - a;
         // NOTE: these overflows can actually happen (when subtitles use color
         // 0,0,0 while output levels only allows 16,16,16 upwards...)
@@ -359,6 +356,19 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
     // prepare YUV/RGB conversion values
     mp_get_yuv2rgb_coeffs(&cspar, yuv2rgb);
     mp_invert_yuv2rgb(rgb2yuv, yuv2rgb);
+    mp_msg(MSGT_VO, MSGL_ERR, "%f %f %f %f // %f %f %f %f // %f %f %f %f\n",
+            rgb2yuv[0][0],
+            rgb2yuv[0][1],
+            rgb2yuv[0][2],
+            rgb2yuv[0][3],
+            rgb2yuv[1][0],
+            rgb2yuv[1][1],
+            rgb2yuv[1][2],
+            rgb2yuv[1][3],
+            rgb2yuv[2][0],
+            rgb2yuv[2][1],
+            rgb2yuv[2][2],
+            rgb2yuv[2][3]);
 
     // calculate bounding range
     if (!sub_bitmaps_bb(sbs, &x1, &y1, &x2, &y2))

@@ -356,19 +356,20 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
     // prepare YUV/RGB conversion values
     mp_get_yuv2rgb_coeffs(&cspar, yuv2rgb);
     mp_invert_yuv2rgb(rgb2yuv, yuv2rgb);
-    mp_msg(MSGT_VO, MSGL_ERR, "%f %f %f %f // %f %f %f %f // %f %f %f %f\n",
-            rgb2yuv[0][0],
-            rgb2yuv[0][1],
-            rgb2yuv[0][2],
-            rgb2yuv[0][3],
-            rgb2yuv[1][0],
-            rgb2yuv[1][1],
-            rgb2yuv[1][2],
-            rgb2yuv[1][3],
-            rgb2yuv[2][0],
-            rgb2yuv[2][1],
-            rgb2yuv[2][2],
-            rgb2yuv[2][3]);
+
+    //mp_msg(MSGT_VO, MSGL_ERR, "%f %f %f %f // %f %f %f %f // %f %f %f %f\n",
+    //        rgb2yuv[0][0],
+    //        rgb2yuv[0][1],
+    //        rgb2yuv[0][2],
+    //        rgb2yuv[0][3],
+    //        rgb2yuv[1][0],
+    //        rgb2yuv[1][1],
+    //        rgb2yuv[1][2],
+    //        rgb2yuv[1][3],
+    //        rgb2yuv[2][0],
+    //        rgb2yuv[2][1],
+    //        rgb2yuv[2][2],
+    //        rgb2yuv[2][3]);
 
     // calculate bounding range
     if (!sub_bitmaps_bb(sbs, &x1, &y1, &x2, &y2))

@@ -28,7 +28,7 @@
 
 static void blend_const16_alpha(uint8_t *dst,
                                 ssize_t dstRowStride,
-                                uint8_t srcp,
+                                uint16_t srcp,
                                 const uint8_t *srca,
                                 ssize_t srcaRowStride,
                                 uint8_t srcamul, int rows,
@@ -44,8 +44,7 @@ static void blend_const16_alpha(uint8_t *dst,
                 // 32bit to force the math ops to operate on 32 bit
             srcap *= srcamul; // now 0..65025
             uint16_t outp =
-                (srcp * srcap * srcamul + dstp *
-                 (65025 - srcap) + 32512) / 65025;
+                (srcp * srcap + dstp * (65025 - srcap) + 32512) / 65025;
             dstr[j] = outp;
         }
     }
@@ -80,7 +79,7 @@ static void blend_src16_alpha(uint8_t *dst,
 
 static void blend_const8_alpha(uint8_t *dst,
                                ssize_t dstRowStride,
-                               uint8_t srcp,
+                               uint16_t srcp,
                                const uint8_t *srca,
                                ssize_t srcaRowStride,
                                uint8_t srcamul, int rows,
@@ -146,7 +145,7 @@ static void blend_src_alpha(uint8_t *dst, ssize_t dstRowStride,
 }
 
 static void blend_const_alpha(uint8_t *dst, ssize_t dstRowStride,
-                              uint8_t srcp,
+                              uint16_t srcp,
                               const uint8_t *srca, ssize_t srcaRowStride,
                               uint8_t srcamul,
                               int rows, int cols, int bytes)

@@ -339,13 +339,6 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
     int color_a;
     float yuv2rgb[3][4];
     float rgb2yuv[3][4];
-    struct mp_csp_params cspar = {
-        .colorspace = *csp,
-        .brightness = 0, .contrast = 1,
-        .hue = 0, .saturation = 1,
-        .rgamma = 1, .ggamma = 1, .bgamma = 1,
-        .texture_bits = 8, .input_bits = 8
-    };
 
 #if 1
     int format = IMGFMT_444P16;
@@ -354,6 +347,14 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
     int format = IMGFMT_444P;
     int bytes = 1;
 #endif
+
+    struct mp_csp_params cspar = {
+        .colorspace = *csp,
+        .brightness = 0, .contrast = 1,
+        .hue = 0, .saturation = 1,
+        .rgamma = 1, .ggamma = 1, .bgamma = 1,
+        .texture_bits = 8, .input_bits = 8 * bytes
+    };
 
     // prepare YUV/RGB conversion values
     mp_get_yuv2rgb_coeffs(&cspar, yuv2rgb);

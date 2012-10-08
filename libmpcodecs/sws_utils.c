@@ -135,10 +135,15 @@ void mp_image_swscale(struct mp_image *dst,
                       const struct mp_image *src,
                       struct mp_csp_details *csp)
 {
+    enum PixelFormat dfmt, sfmt;
+    dfmt = imgfmt2pixfmt(dst->imgfmt);
+    sfmt = imgfmt2pixfmt(src->imgfmt);
+    if (src->imgfmt == IMGFMT_RGB8 || src->imgfmt == IMGFMT_BGR8)
+        sfmt = PIX_FMT_PAL8;
+
     struct SwsContext *sws =
-        sws_getContextFromCmdLine_hq(src->w, src->h, src->imgfmt,
-                                     dst->w, dst->h,
-                                     dst->imgfmt);
+        sws_getContext(src->w, src->h, sfmt, dst->w, dst->h, dfmt,
+                       SWS_FAST_BILINEAR, NULL, NULL, NULL);
     struct mp_csp_details mycsp = MP_CSP_DETAILS_DEFAULTS;
     if (csp)
         mycsp = *csp;

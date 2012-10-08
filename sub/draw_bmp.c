@@ -302,11 +302,14 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         int b = (sb->libass.color >> 8) & 0xFF;
         int a = sb->libass.color & 0xFF;
         color_yuv[0] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0)
+                    * (bytes == 2 ? 256 : 1));
         color_yuv[1] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1)
+                    * (bytes == 2 ? 256 : 1));
         color_yuv[2] =
-            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2));
+            rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2)
+                    * (bytes == 2 ? 256 : 1));
         *color_a = 255 - a;
         // NOTE: these overflows can actually happen (when subtitles use color
         // 0,0,0 while output levels only allows 16,16,16 upwards...)
@@ -432,6 +435,24 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
 #ifdef ACCURATE
     int format = IMGFMT_444P16;
     int bytes = 2;
+    // however, we can try matching 8bit, 9bit, 10bit yuv formats!
+    if (dst->flags & MP_IMGFLAG_YUV) {
+        int bits = -1;
+        if (mp_get_chroma_shift(dst->imgfmt, NULL, NULL, &bits)) {
+            switch (bits) {
+                case 8:
+                    format = IMGFMT_444P;
+                    bytes = 1;
+                    break;
+                case 9:
+                    format = IMGFMT_444P9;
+                    break;
+                case 10:
+                    format = IMGFMT_444P10;
+                    break;
+            }
+        }
+    }
 #else
     int format = IMGFMT_444P;
     int bytes = 1;
@@ -442,7 +463,7 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
         .brightness = 0, .contrast = 1,
         .hue = 0, .saturation = 1,
         .rgamma = 1, .ggamma = 1, .bgamma = 1,
-        .texture_bits = 8, .input_bits = 8 * bytes
+        .texture_bits = 8, .input_bits = 8
     };
 
     // prepare YUV/RGB conversion values

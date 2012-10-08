@@ -386,7 +386,7 @@ static void get_swscale_requirements(int *sx, int *sy,
 
     for (p = 0; p < img->num_planes; ++p) {
         int bits = MP_IMAGE_BITS_PER_PIXEL_ON_PLANE(img, p);
-        while ((*sx * bits) % (SWS_MIN_BYTE_ALIGN * 8))
+        while (((*sx >> img->chroma_x_shift) * bits) % (SWS_MIN_BYTE_ALIGN * 8))
             *sx *= 2;
     }
 }

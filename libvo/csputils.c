@@ -183,7 +183,7 @@ void mp_get_yuv2rgb_coeffs(struct mp_csp_params *params, float m[3][4])
     if (levels_in <= MP_CSP_LEVELS_AUTO || levels_in >= MP_CSP_LEVELS_COUNT)
         levels_in = MP_CSP_LEVELS_TV;
     assert(params->input_bits >= 8);
-    // assert(params->texture_bits >= params->input_bits); // why?
+    assert(params->texture_bits >= params->input_bits);
     double s = (1 << params->input_bits-8) / ((1<<params->texture_bits)-1.);
     // The values below are written in 0-255 scale
     struct yuvlevels { double ymin, ymax, cmin, cmid; }

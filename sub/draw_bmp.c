@@ -28,6 +28,7 @@
 
 #define ACCURATE
 #define CONDITIONAL
+#define CONDITIONAL2
 
 static void blend_const16_alpha(uint8_t *dst,
                                 ssize_t dstRowStride,
@@ -51,6 +52,12 @@ static void blend_const16_alpha(uint8_t *dst,
 #ifdef CONDITIONAL
             if (!srcap)
                 continue;
+#endif
+#ifdef CONDITIONAL2
+            if (srcap == 255 && srcamul == 255) {
+                dstr[j] = srcp;
+                continue;
+            }
 #endif
             uint16_t dstp = dstr[j];
             srcap *= srcamul; // now 0..65025
@@ -82,8 +89,14 @@ static void blend_src16_alpha(uint8_t *dst,
             if (!srcap)
                 continue;
 #endif
-            uint16_t dstp = dstr[j];
             uint16_t srcp = srcr[j];
+#ifdef CONDITIONAL2
+            if (srcap == 255) {
+                dstr[j] = srcp;
+                continue;
+            }
+#endif
+            uint16_t dstp = dstr[j];
             uint16_t outp =
                 (srcp * srcap + dstp * (255 - srcap) + 127) / 255;
             dstr[j] = outp;
@@ -113,6 +126,12 @@ static void blend_const8_alpha(uint8_t *dst,
 #ifdef CONDITIONAL
             if (!srcap)
                 continue;
+#endif
+#ifdef CONDITIONAL2
+            if (srcap == 255 && srcamul == 255) {
+                dstr[j] = srcp;
+                continue;
+            }
 #endif
             uint8_t dstp = dstr[j];
 #ifdef ACCURATE
@@ -151,8 +170,14 @@ static void blend_src8_alpha(uint8_t *dst,
             if (!srcap)
                 continue;
 #endif
-            uint8_t dstp = dstr[j];
             uint8_t srcp = srcr[j];
+#ifdef CONDITIONAL2
+            if (srcap == 255) {
+                dstr[j] = srcp;
+                continue;
+            }
+#endif
+            uint8_t dstp = dstr[j];
 #ifdef ACCURATE
             uint8_t outp =
                 (srcp * srcap + dstp * (255 - srcap) + 127) / 255;

@@ -471,10 +471,16 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
         return;  // nothing to do
 
     // convert to a temp image
-    mp_image_t *temp = alloc_mpi(x2 - x1, y2 - y1, format);
+    mp_image_t *temp;
     mp_image_t dst_region = *dst;
-    mp_image_crop(&dst_region, x1, y1, x2 - x1, y2 - y1);
-    mp_image_swscale(temp, &dst_region, csp);
+    if (dst->imgfmt == format) {
+        mp_image_crop(&dst_region, x1, y1, x2 - x1, y2 - y1);
+        temp = &dst_region;
+    } else {
+        mp_image_crop(&dst_region, x1, y1, x2 - x1, y2 - y1);
+        temp = alloc_mpi(x2 - x1, y2 - y1, format);
+        mp_image_swscale(temp, &dst_region, csp);
+    }
 
     for (i = 0; i < sbs->num_parts; ++i) {
         struct sub_bitmap *sb = &sbs->parts[i];
@@ -531,11 +537,13 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
             free_mp_image(sba);
     }
 
-    // convert back
-    mp_image_swscale(&dst_region, temp, csp);
+    if (temp != &dst_region) {
+        // convert back
+        mp_image_swscale(&dst_region, temp, csp);
 
-    // clean up
-    free_mp_image(temp);
+        // clean up
+        free_mp_image(temp);
+    }
 }
 
 // vim: ts=4 sw=4 et tw=80

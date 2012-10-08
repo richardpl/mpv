@@ -560,7 +560,7 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
 
     if (temp != &dst_region) {
         // convert back
-        mp_image_swscale(&dst_region, temp, csp, SWS_BILINEAR); // chroma down
+        mp_image_swscale(&dst_region, temp, csp, SWS_AREA); // chroma down
 
         // clean up
         free_mp_image(temp);

@@ -133,7 +133,8 @@ struct SwsContext *sws_getContextFromCmdLine_hq(int srcW, int srcH,
 
 void mp_image_swscale(struct mp_image *dst,
                       const struct mp_image *src,
-                      struct mp_csp_details *csp)
+                      struct mp_csp_details *csp,
+                      int my_sws_flags)
 {
     enum PixelFormat dfmt, sfmt;
     dfmt = imgfmt2pixfmt(dst->imgfmt);
@@ -143,7 +144,7 @@ void mp_image_swscale(struct mp_image *dst,
 
     struct SwsContext *sws =
         sws_getContext(src->w, src->h, sfmt, dst->w, dst->h, dfmt,
-                       SWS_BILINEAR, NULL, NULL, NULL);
+                       my_sws_flags, NULL, NULL, NULL);
     struct mp_csp_details mycsp = MP_CSP_DETAILS_DEFAULTS;
     if (csp)
         mycsp = *csp;

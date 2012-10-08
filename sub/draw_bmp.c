@@ -26,6 +26,8 @@
 #include "libmpcodecs/img_format.h"
 #include "libvo/csputils.h"
 
+#undef ACCURATE
+
 static void blend_const16_alpha(uint8_t *dst,
                                 ssize_t dstRowStride,
                                 uint16_t srcp,
@@ -92,10 +94,18 @@ static void blend_const8_alpha(uint8_t *dst,
             uint8_t dstp = dstr[j];
             uint32_t srcap = srcar[j];
                 // 32bit to force the math ops to operate on 32 bit
+#ifdef ACCURATE
             srcap *= srcamul; // now 0..65025
             uint8_t outp =
                 (srcp * srcap + dstp * (65025 - srcap) + 32512) / 65025;
             dstr[j] = outp;
+#else
+            srcap = (srcap * srcamul + 255) >> 8;
+            uint8_t outp =
+                //(srcp * srcap + dstp * (255 - srcap) + 255) >> 8;
+                dstp + (((srcp - dstp) * srcap + 255) >> 8);
+            dstr[j] = outp;
+#endif
         }
     }
 }
@@ -119,8 +129,13 @@ static void blend_src8_alpha(uint8_t *dst,
             uint8_t srcp = srcr[j];
             uint16_t srcap = srcar[j];
                 // 16bit to force the math ops to operate on 16 bit
+#ifdef ACCURATE
             uint8_t outp =
                 (srcp * srcap + dstp * (255 - srcap) + 127) / 255;
+#else
+            uint8_t outp =
+                dstp + ((srcp - dstp) * srcap + 255) >> 8;
+#endif
             dstr[j] = outp;
         }
     }
@@ -365,7 +380,7 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
     float yuv2rgb[3][4];
     float rgb2yuv[3][4];
 
-#if 1
+#ifdef ACCURATE
     int format = IMGFMT_444P16;
     int bytes = 2;
 #else

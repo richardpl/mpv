@@ -243,9 +243,11 @@ static void unpremultiply_and_split_bgra(mp_image_t *img, mp_image_t *alpha)
             unsigned char aval = irow[4 * x + 3];
             int div = 255 * (int) aval;
             int add = div / 2;
-            irow[4 * x + 0] = min(255, (irow[4 * x + 0] * 255 + add) / div);
-            irow[4 * x + 1] = min(255, (irow[4 * x + 1] * 255 + add) / div);
-            irow[4 * x + 2] = min(255, (irow[4 * x + 2] * 255 + add) / div);
+            if (aval) {
+                irow[4 * x + 0] = min(255, (irow[4 * x + 0] * 255 + add) / div);
+                irow[4 * x + 1] = min(255, (irow[4 * x + 1] * 255 + add) / div);
+                irow[4 * x + 2] = min(255, (irow[4 * x + 2] * 255 + add) / div);
+            }
             arow[x] = aval;
         }
     }

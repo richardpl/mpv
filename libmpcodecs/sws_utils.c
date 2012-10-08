@@ -143,7 +143,7 @@ void mp_image_swscale(struct mp_image *dst,
 
     struct SwsContext *sws =
         sws_getContext(src->w, src->h, sfmt, dst->w, dst->h, dfmt,
-                       SWS_FAST_BILINEAR, NULL, NULL, NULL);
+                       SWS_BILINEAR, NULL, NULL, NULL);
     struct mp_csp_details mycsp = MP_CSP_DETAILS_DEFAULTS;
     if (csp)
         mycsp = *csp;

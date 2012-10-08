@@ -26,7 +26,8 @@
 #include "libmpcodecs/img_format.h"
 #include "libvo/csputils.h"
 
-#undef ACCURATE
+#define ACCURATE
+#define CONDITIONAL
 
 static void blend_const16_alpha(uint8_t *dst,
                                 ssize_t dstRowStride,
@@ -37,13 +38,21 @@ static void blend_const16_alpha(uint8_t *dst,
                                 int cols)
 {
     int i, j;
+#ifdef CONDITIONAL
+    if (!srcamul)
+        return;
+#endif
     for (i = 0; i < rows; ++i) {
         uint16_t *dstr = (uint16_t *) (dst + dstRowStride * i);
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
-            uint16_t dstp = dstr[j];
             uint32_t srcap = srcar[j];
                 // 32bit to force the math ops to operate on 32 bit
+#ifdef CONDITIONAL
+            if (!srcap)
+                continue;
+#endif
+            uint16_t dstp = dstr[j];
             srcap *= srcamul; // now 0..65025
             uint16_t outp =
                 (srcp * srcap + dstp * (65025 - srcap) + 32512) / 65025;
@@ -67,10 +76,14 @@ static void blend_src16_alpha(uint8_t *dst,
         const uint16_t *srcr = (const uint16_t *) (src + srcRowStride * i);
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
-            uint16_t dstp = dstr[j];
-            uint16_t srcp = srcr[j];
             uint32_t srcap = srcar[j];
                 // 32bit to force the math ops to operate on 32 bit
+#ifdef CONDITIONAL
+            if (!srcap)
+                continue;
+#endif
+            uint16_t dstp = dstr[j];
+            uint16_t srcp = srcr[j];
             uint16_t outp =
                 (srcp * srcap + dstp * (255 - srcap) + 127) / 255;
             dstr[j] = outp;
@@ -87,13 +100,21 @@ static void blend_const8_alpha(uint8_t *dst,
                                int cols)
 {
     int i, j;
+#ifdef CONDITIONAL
+    if (!srcamul)
+        return;
+#endif
     for (i = 0; i < rows; ++i) {
         uint8_t *dstr = dst + dstRowStride * i;
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
-            uint8_t dstp = dstr[j];
             uint32_t srcap = srcar[j];
                 // 32bit to force the math ops to operate on 32 bit
+#ifdef CONDITIONAL
+            if (!srcap)
+                continue;
+#endif
+            uint8_t dstp = dstr[j];
 #ifdef ACCURATE
             srcap *= srcamul; // now 0..65025
             uint8_t outp =
@@ -102,8 +123,7 @@ static void blend_const8_alpha(uint8_t *dst,
 #else
             srcap = (srcap * srcamul + 255) >> 8;
             uint8_t outp =
-                //(srcp * srcap + dstp * (255 - srcap) + 255) >> 8;
-                dstp + (((srcp - dstp) * srcap + 255) >> 8);
+                (srcp * srcap + dstp * (255 - srcap) + 255) >> 8;
             dstr[j] = outp;
 #endif
         }
@@ -125,16 +145,20 @@ static void blend_src8_alpha(uint8_t *dst,
         const uint8_t *srcr = src + srcRowStride * i;
         const uint8_t *srcar = srca + srcaRowStride * i;
         for (j = 0; j < cols; ++j) {
-            uint8_t dstp = dstr[j];
-            uint8_t srcp = srcr[j];
             uint16_t srcap = srcar[j];
                 // 16bit to force the math ops to operate on 16 bit
+#ifdef CONDITIONAL
+            if (!srcap)
+                continue;
+#endif
+            uint8_t dstp = dstr[j];
+            uint8_t srcp = srcr[j];
 #ifdef ACCURATE
             uint8_t outp =
                 (srcp * srcap + dstp * (255 - srcap) + 127) / 255;
 #else
             uint8_t outp =
-                dstp + ((srcp - dstp) * srcap + 255) >> 8;
+                (srcp * srcap + dstp * (255 - srcap) + 255) >> 8;
 #endif
             dstr[j] = outp;
         }
@@ -450,13 +474,13 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
 
         // call blend_alpha 3 times
         int p;
+        int src_x = (dst_x + x1) - sb->x;
+        int src_y = (dst_y + y1) - sb->y;
+        unsigned char *alpha_p =
+            sba->planes[0] + src_y * sba->stride[0] + src_x;
         for (p = 0; p < 3; ++p) {
             unsigned char *dst_p =
                 temp->planes[p] + dst_y * temp->stride[p] + dst_x * bytes;
-            int src_x = (dst_x + x1) - sb->x;
-            int src_y = (dst_y + y1) - sb->y;
-            unsigned char *alpha_p =
-                sba->planes[0] + src_y * sba->stride[0] + src_x;
             if (sbi) {
                 unsigned char *src_p =
                     sbi->planes[p] + src_y * sbi->stride[p] + src_x * bytes;

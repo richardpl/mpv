@@ -271,13 +271,12 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         sbisrc->stride[0] = sb->stride;
         mp_image_t *sbisrc2 = alloc_mpi(sb->dw, sb->dh, IMGFMT_BGRA);
         mp_image_swscale(sbisrc2, sbisrc, csp, SWS_BILINEAR);
-        free_mp_image(sbisrc);
 
         // sbisrc2 now is the original image in premultiplied alpha, but
         // properly scaled...
         // now, un-premultiply so we can work in YUV color space, also extract
         // alpha
-        *sba = alloc_mpi(sb->w, sb->h, IMGFMT_Y8);
+        *sba = alloc_mpi(sb->dw, sb->dh, IMGFMT_Y8);
         unpremultiply_and_split_bgra(sbisrc2, *sba);
 
         // convert to the output format
@@ -285,6 +284,7 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
                          bytes == 2 ? IMGFMT_444P16 : IMGFMT_444P);
         mp_image_swscale(*sbi, sbisrc, csp, SWS_BILINEAR);
 
+        free_mp_image(sbisrc);
         free_mp_image(sbisrc2);
 
         color_yuv[0] = 255;

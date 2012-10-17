@@ -244,7 +244,8 @@ static void unpremultiply_and_split_bgra(mp_image_t *img, mp_image_t *alpha)
             // multiplied = separate * alpha / 255
             // separate = rint(multiplied * 255 / alpha)
             //          = floor(multiplied * 255 / alpha + 0.5)
-            //          = floor(multiplied * 255 + 0.5 * alpha) / alpha
+            //          = floor((multiplied * 255 + 0.5 * alpha) / alpha)
+            //          = floor((multiplied * 255 + floor(0.5 * alpha)) / alpha)
             int div = (int) aval;
             int add = div / 2;
             if (aval) {

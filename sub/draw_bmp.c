@@ -282,7 +282,7 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         // convert to the output format
         *sbi = alloc_mpi(sb->dw, sb->dh,
                          bytes == 2 ? IMGFMT_444P16 : IMGFMT_444P);
-        mp_image_swscale(*sbi, sbisrc, csp, SWS_BILINEAR);
+        mp_image_swscale(*sbi, sbisrc2, csp, SWS_BILINEAR);
 
         free_mp_image(sbisrc);
         free_mp_image(sbisrc2);

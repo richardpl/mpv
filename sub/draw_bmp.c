@@ -262,7 +262,7 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
                                     int *color_a, struct mp_image **sba,
                                     struct sub_bitmap *sb,
                                     int format, struct mp_csp_details *csp,
-                                    float rgb2yuv[3][4], int bytes)
+                                    float rgb2yuv[3][4], int imgfmt, int bits)
 {
     *sbi = NULL;
     *sba = NULL;
@@ -285,8 +285,7 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         unpremultiply_and_split_bgra(sbisrc2, *sba);
 
         // convert to the output format
-        *sbi = alloc_mpi(sb->dw, sb->dh,
-                         bytes == 2 ? IMGFMT_444P16 : IMGFMT_444P);
+        *sbi = alloc_mpi(sb->dw, sb->dh, imgfmt);
         mp_image_swscale(*sbi, sbisrc2, csp, SWS_BILINEAR);
 
         free_mp_image(sbisrc);
@@ -310,13 +309,13 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
         int a = sb->libass.color & 0xFF;
         color_yuv[0] =
             rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 0)
-                    * (bytes == 2 ? 256 : 1));
+                    * (1 << (bits - 8)));
         color_yuv[1] =
             rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 1)
-                    * (bytes == 2 ? 256 : 1));
+                    * (1 << (bits - 8)));
         color_yuv[2] =
             rint(MP_MAP_RGB2YUV_COLOR(rgb2yuv, r, g, b, 255, 2)
-                    * (bytes == 2 ? 256 : 1));
+                    * (1 << (bits - 8)));
         *color_a = 255 - a;
         // NOTE: these overflows can actually happen (when subtitles use color
         // 0,0,0 while output levels only allows 16,16,16 upwards...)
@@ -328,12 +327,12 @@ static bool sub_bitmap_to_mp_images(struct mp_image **sbi, int *color_yuv,
             color_yuv[2] = 0;
         if (*color_a < 0)
             *color_a = 0;
-        if (color_yuv[0] > (bytes == 2 ? 65535 : 255))
-            color_yuv[0] = (bytes == 2 ? 65535 : 255);
-        if (color_yuv[1] > (bytes == 2 ? 65535 : 255))
-            color_yuv[1] = (bytes == 2 ? 65535 : 255);
-        if (color_yuv[2] > (bytes == 2 ? 65535 : 255))
-            color_yuv[2] = (bytes == 2 ? 65535 : 255);
+        if (color_yuv[0] > ((1 << bits) - 1))
+            color_yuv[0] = ((1 << bits) - 1);
+        if (color_yuv[1] > ((1 << bits) - 1))
+            color_yuv[1] = ((1 << bits) - 1);
+        if (color_yuv[2] > ((1 << bits) - 1))
+            color_yuv[2] = ((1 << bits) - 1);
         if (*color_a > 255)
             *color_a = 255;
         return true;
@@ -442,15 +441,13 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
 
 #ifdef ACCURATE
     int format = IMGFMT_444P16;
-    int bytes = 2;
+    int bits = 16;
     // however, we can try matching 8bit, 9bit, 10bit yuv formats!
     if (dst->flags & MP_IMGFLAG_YUV) {
-        int bits = -1;
         if (mp_get_chroma_shift(dst->imgfmt, NULL, NULL, &bits)) {
             switch (bits) {
                 case 8:
                     format = IMGFMT_444P;
-                    bytes = 1;
                     break;
                 case 9:
                     format = IMGFMT_444P9;
@@ -458,13 +455,18 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
                 case 10:
                     format = IMGFMT_444P10;
                     break;
+                default:
+                    // revert back
+                    bits = 16;
+                    break;
             }
         }
     }
 #else
     int format = IMGFMT_444P;
-    int bytes = 1;
+    int bits = 8;
 #endif
+    int bytes = (bits + 7) / 8;
 
     struct mp_csp_params cspar = {
         .colorspace = *csp,
@@ -526,7 +528,7 @@ void mp_draw_sub_bitmaps(struct mp_image *dst, struct sub_bitmaps *sbs,
             continue;
 
         if (!sub_bitmap_to_mp_images(&sbi, color_yuv, &color_a, &sba, sb,
-                                     sbs->format, csp, rgb2yuv, bytes)) {
+                                     sbs->format, csp, rgb2yuv, format, bits)) {
             mp_msg(MSGT_VO, MSGL_ERR,
                    "render_sub_bitmap: invalid sub bitmap type\n");
             continue;

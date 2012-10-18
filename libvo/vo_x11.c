@@ -43,7 +43,6 @@
 
 #include "sub/sub.h"
 #include "sub/dec_sub.h"
-#include "sub/draw_bmp.h"
 
 #include "libmpcodecs/sws_utils.h"
 #define MODE_RGB  0x1

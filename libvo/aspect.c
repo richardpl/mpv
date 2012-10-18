@@ -47,7 +47,7 @@ void aspect_save_screenres(struct vo *vo, int scrw, int scrh)
     vo->aspdat.scrw = scrw;
     vo->aspdat.scrh = scrh;
     if (opts->force_monitor_aspect)
-        vo->monitor_par = opts->force_monitor_aspect * scrw / scrh;
+        vo->monitor_par = opts->force_monitor_aspect * scrh / scrw;
     else
         vo->monitor_par = 1.0 / opts->monitor_pixel_aspect;
 }

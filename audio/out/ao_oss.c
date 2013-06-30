@@ -493,7 +493,7 @@ static void audio_pause(struct ao *ao)
 {
     struct priv *p = ao->priv;
     p->prepause_space = get_space(ao);
-    close_device(ao);
+    ioctl(p->audio_fd, SNDCTL_DSP_RESET, NULL);
 }
 
 // plays 'len' bytes of 'data'
@@ -517,7 +517,6 @@ static void audio_resume(struct ao *ao)
 {
     struct priv *p = ao->priv;
     int fillcnt;
-    reset(ao);
     fillcnt = get_space(ao) - p->prepause_space;
     if (fillcnt > 0 && !(ao->format & AF_FORMAT_SPECIAL_MASK)) {
         void *silence = calloc(fillcnt, 1);

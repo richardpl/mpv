@@ -34,7 +34,6 @@ SOURCES-$(DVDREAD)              += stream/stream_dvd.c \
                                    stream/stream_dvd_common.c
 
 SOURCES-$(HAVE_SYS_MMAN_H)      += audio/filter/af_export.c
-SOURCES-$(LADSPA)               += audio/filter/af_ladspa.c
 SOURCES-$(LIBASS)               += sub/ass_mp.c sub/sd_ass.c \
                                    demux/demux_libass.c
 
@@ -139,27 +138,13 @@ SOURCES = talloc.c \
           audio/decode/ad_spdif.c      \
           audio/decode/dec_audio.c \
           audio/filter/af.c \
-          audio/filter/af_center.c \
-          audio/filter/af_channels.c \
-          audio/filter/af_delay.c \
-          audio/filter/af_dummy.c \
           audio/filter/af_equalizer.c \
-          audio/filter/af_extrastereo.c \
-          audio/filter/af_force.c \
           audio/filter/af_format.c \
           audio/filter/af_hrtf.c \
-          audio/filter/af_karaoke.c \
           audio/filter/af_lavcac3enc.c \
           audio/filter/af_lavrresample.c \
-          audio/filter/af_pan.c \
           audio/filter/af_scaletempo.c \
-          audio/filter/af_sinesuppress.c \
-          audio/filter/af_sub.c \
-          audio/filter/af_surround.c \
-          audio/filter/af_sweep.c \
           audio/filter/af_tools.c \
-          audio/filter/af_drc.c \
-          audio/filter/af_volume.c \
           audio/filter/filter.c \
           audio/filter/window.c \
           audio/out/ao.c \
@@ -242,34 +227,14 @@ SOURCES = talloc.c \
           video/decode/vd.c \
           video/decode/vd_lavc.c \
           video/filter/vf.c \
-          video/filter/pullup.c \
-          video/filter/vf_crop.c \
-          video/filter/vf_delogo.c \
-          video/filter/vf_divtc.c \
-          video/filter/vf_down3dright.c \
-          video/filter/vf_dsize.c \
           video/filter/vf_eq.c \
           video/filter/vf_expand.c \
-          video/filter/vf_flip.c \
           video/filter/vf_format.c \
-          video/filter/vf_gradfun.c \
-          video/filter/vf_hqdn3d.c \
-          video/filter/vf_ilpack.c \
-          video/filter/vf_mirror.c \
           video/filter/vf_noformat.c \
-          video/filter/vf_noise.c \
-          video/filter/vf_phase.c \
-          video/filter/vf_pullup.c \
-          video/filter/vf_rotate.c \
           video/filter/vf_scale.c \
           video/filter/vf_screenshot.c \
           video/filter/vf_softpulldown.c \
-          video/filter/vf_stereo3d.c \
-          video/filter/vf_sub.c \
-          video/filter/vf_swapuv.c \
-          video/filter/vf_unsharp.c \
           video/filter/vf_vo.c \
-          video/filter/vf_yadif.c \
           video/out/bitmap_packer.c \
           video/out/aspect.c \
           video/out/filter_kernels.c \

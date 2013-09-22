@@ -40,75 +40,32 @@
 #include "video/memcpy_pic.h"
 
 extern const vf_info_t vf_info_vo;
-extern const vf_info_t vf_info_crop;
 extern const vf_info_t vf_info_expand;
-extern const vf_info_t vf_info_pp;
 extern const vf_info_t vf_info_scale;
 extern const vf_info_t vf_info_format;
 extern const vf_info_t vf_info_noformat;
-extern const vf_info_t vf_info_flip;
-extern const vf_info_t vf_info_rotate;
-extern const vf_info_t vf_info_mirror;
-extern const vf_info_t vf_info_noise;
 extern const vf_info_t vf_info_eq;
-extern const vf_info_t vf_info_gradfun;
-extern const vf_info_t vf_info_unsharp;
-extern const vf_info_t vf_info_swapuv;
-extern const vf_info_t vf_info_down3dright;
-extern const vf_info_t vf_info_hqdn3d;
-extern const vf_info_t vf_info_ilpack;
-extern const vf_info_t vf_info_dsize;
 extern const vf_info_t vf_info_softpulldown;
-extern const vf_info_t vf_info_pullup;
-extern const vf_info_t vf_info_delogo;
-extern const vf_info_t vf_info_phase;
-extern const vf_info_t vf_info_divtc;
-extern const vf_info_t vf_info_softskip;
 extern const vf_info_t vf_info_screenshot;
-extern const vf_info_t vf_info_sub;
-extern const vf_info_t vf_info_yadif;
-extern const vf_info_t vf_info_stereo3d;
 extern const vf_info_t vf_info_dlopen;
 extern const vf_info_t vf_info_lavfi;
 
 // list of available filters:
 static const vf_info_t *const filter_list[] = {
-    &vf_info_crop,
     &vf_info_expand,
     &vf_info_scale,
     &vf_info_vo,
     &vf_info_format,
     &vf_info_noformat,
-    &vf_info_flip,
-    &vf_info_rotate,
-    &vf_info_mirror,
 
-#ifdef CONFIG_LIBPOSTPROC
-    &vf_info_pp,
-#endif
 #ifdef CONFIG_VF_LAVFI
     &vf_info_lavfi,
 #endif
 
     &vf_info_screenshot,
 
-    &vf_info_noise,
     &vf_info_eq,
-    &vf_info_gradfun,
-    &vf_info_unsharp,
-    &vf_info_swapuv,
-    &vf_info_down3dright,
-    &vf_info_hqdn3d,
-    &vf_info_ilpack,
-    &vf_info_dsize,
     &vf_info_softpulldown,
-    &vf_info_pullup,
-    &vf_info_delogo,
-    &vf_info_phase,
-    &vf_info_divtc,
-    &vf_info_sub,
-    &vf_info_yadif,
-    &vf_info_stereo3d,
 #ifdef CONFIG_DLOPEN
     &vf_info_dlopen,
 #endif

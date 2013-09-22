@@ -28,56 +28,24 @@
 #include "af.h"
 
 // Static list of filters
-extern struct af_info af_info_dummy;
-extern struct af_info af_info_delay;
-extern struct af_info af_info_channels;
 extern struct af_info af_info_format;
-extern struct af_info af_info_force;
-extern struct af_info af_info_volume;
 extern struct af_info af_info_equalizer;
-extern struct af_info af_info_pan;
-extern struct af_info af_info_surround;
-extern struct af_info af_info_sub;
 extern struct af_info af_info_export;
-extern struct af_info af_info_drc;
-extern struct af_info af_info_extrastereo;
 extern struct af_info af_info_lavcac3enc;
 extern struct af_info af_info_lavrresample;
-extern struct af_info af_info_sweep;
 extern struct af_info af_info_hrtf;
-extern struct af_info af_info_ladspa;
-extern struct af_info af_info_center;
-extern struct af_info af_info_sinesuppress;
-extern struct af_info af_info_karaoke;
 extern struct af_info af_info_scaletempo;
 extern struct af_info af_info_bs2b;
 extern struct af_info af_info_lavfi;
 
 static struct af_info* filter_list[] = {
-    &af_info_dummy,
-    &af_info_delay,
-    &af_info_channels,
-    &af_info_force,
-    &af_info_volume,
     &af_info_equalizer,
-    &af_info_pan,
-    &af_info_surround,
-    &af_info_sub,
 #ifdef HAVE_SYS_MMAN_H
     &af_info_export,
 #endif
-    &af_info_drc,
-    &af_info_extrastereo,
     &af_info_lavcac3enc,
     &af_info_lavrresample,
-    &af_info_sweep,
     &af_info_hrtf,
-#ifdef CONFIG_LADSPA
-    &af_info_ladspa,
-#endif
-    &af_info_center,
-    &af_info_sinesuppress,
-    &af_info_karaoke,
     &af_info_scaletempo,
 #ifdef CONFIG_LIBBS2B
     &af_info_bs2b,
